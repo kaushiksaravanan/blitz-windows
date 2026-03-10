@@ -1,0 +1,52 @@
+# Swift / Xcode build artifacts
+.build/
+*.o
+*.d
+*.swp
+*.lock
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
+*.moved-aside
+
+# Xcode
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# SPM
+.swiftpm/
+Packages/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Node (for NodeSidecar)
+node_modules/
+npm-debug.log
+yarn-error.log
+.npm/
+
+# Environment / secrets
+.env
+.env.local
+*.pem
+*.p8
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~

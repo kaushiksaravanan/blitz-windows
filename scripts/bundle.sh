@@ -1,0 +1,121 @@
+#!/bin/bash
+# Creates a proper macOS .app bundle from the SPM build.
+# Signs with Developer ID so TCC grants persist across rebuilds.
+# Also bundles the Node.js sidecar (dist/server/) into Resources.
+set -e
+
+CONFIG="${1:-release}"
+APP_NAME="Blitz"
+BUNDLE_DIR=".build/${APP_NAME}.app"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Load .env (existing env vars take precedence)
+[ -f "$ROOT_DIR/.env" ] && set -a && source "$ROOT_DIR/.env" && set +a
+
+SIGNING_IDENTITY="${APPLE_SIGNING_IDENTITY:-}"
+ENTITLEMENTS="$ROOT_DIR/scripts/Entitlements.plist"
+
+if [ -z "$SIGNING_IDENTITY" ]; then
+    echo "WARNING: APPLE_SIGNING_IDENTITY not set, falling back to ad-hoc signing."
+    echo "         TCC will require re-approval on every rebuild."
+    SIGNING_IDENTITY="-"
+fi
+
+# Read version from package.json
+VERSION=$(node -e "const p=JSON.parse(require('fs').readFileSync('$ROOT_DIR/package.json','utf8')); process.stdout.write(p.version)" 2>/dev/null \
+  || grep '"version"' "$ROOT_DIR/package.json" | head -1 | sed 's/.*: *"\(.*\)".*/\1/')
+echo "Building $APP_NAME.app v$VERSION ($CONFIG)..."
+
+# Build
+swift build -c "$CONFIG"
+
+# Create .app structure
+mkdir -p "$BUNDLE_DIR/Contents/MacOS"
+mkdir -p "$BUNDLE_DIR/Contents/Resources"
+
+# Copy binary
+cp ".build/${CONFIG}/${APP_NAME}" "$BUNDLE_DIR/Contents/MacOS/${APP_NAME}"
+
+# Copy Metal shader resources
+for bundle_dir in .build/${CONFIG}/*.bundle; do
+    if [ -d "$bundle_dir" ]; then
+        cp -R "$bundle_dir" "$BUNDLE_DIR/Contents/Resources/"
+    fi
+done
+
+# Bundle the Node.js sidecar server (built by build-server.mjs)
+SIDECAR_SRC="$ROOT_DIR/dist/server"
+if [ -d "$SIDECAR_SRC" ]; then
+    echo "Bundling Node.js sidecar..."
+    mkdir -p "$BUNDLE_DIR/Contents/Resources/dist"
+    # Use ditto to avoid ._  Apple Double files
+    ditto "$SIDECAR_SRC" "$BUNDLE_DIR/Contents/Resources/dist/server"
+    echo "  Sidecar bundled at: $BUNDLE_DIR/Contents/Resources/dist/server/"
+else
+    echo "WARNING: dist/server not found — run 'npm run build:sidecar' first."
+    echo "         The app will launch but the Node.js sidecar will not work."
+fi
+
+# Write Info.plist with correct version
+cat > "$BUNDLE_DIR/Contents/Info.plist" << PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>Blitz</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.blitz.macos</string>
+    <key>CFBundleName</key>
+    <string>Blitz</string>
+    <key>CFBundleDisplayName</key>
+    <string>Blitz</string>
+    <key>CFBundleVersion</key>
+    <string>$VERSION</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$VERSION</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSSupportsAutomaticTermination</key>
+    <false/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Blitz needs screen recording access to capture the iOS Simulator display.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Blitz needs camera access to capture physical iOS device screens via USB.</string>
+</dict>
+</plist>
+PLIST
+
+# Sign nested native binaries first (inside-out — required for notarization)
+if [ "$SIGNING_IDENTITY" != "-" ]; then
+    echo "Signing native dependencies..."
+    find "$BUNDLE_DIR/Contents/Resources" -type f \( -name "*.node" -o -name "*.dylib" \) 2>/dev/null | while read -r f; do
+        codesign --force --options runtime --timestamp \
+            --sign "$SIGNING_IDENTITY" \
+            --entitlements "$ENTITLEMENTS" \
+            "$f" 2>/dev/null && echo "  Signed: $f" || true
+    done
+fi
+
+# Sign the .app bundle (must be after nested signing)
+if [ "$SIGNING_IDENTITY" = "-" ]; then
+    codesign --force --sign - --entitlements "$ENTITLEMENTS" "$BUNDLE_DIR"
+else
+    codesign --force --options runtime --timestamp \
+        --sign "$SIGNING_IDENTITY" \
+        --entitlements "$ENTITLEMENTS" \
+        "$BUNDLE_DIR"
+fi
+
+echo ""
+echo "Built: $BUNDLE_DIR (v$VERSION)"
+echo "Signed with: $SIGNING_IDENTITY"
+echo "Launch with: open $BUNDLE_DIR"
