@@ -201,11 +201,7 @@ actor MCPToolExecutor {
         case "settings_save":
             return await executeSettingsSave()
 
-        // -- Recording --
-        case "recording_start":
-            return await executeRecordingStart()
-        case "recording_stop":
-            return await executeRecordingStop()
+
 
         // -- Tab State --
         case "get_tab_state":
@@ -271,8 +267,7 @@ actor MCPToolExecutor {
         let state = await MainActor.run { () -> [String: Any] in
             var result: [String: Any] = [
                 "activeTab": appState.activeTab.rawValue,
-                "isStreaming": appState.simulatorStream.isCapturing,
-                "isRecording": appState.recordingManager.isRecording
+                "isStreaming": appState.simulatorStream.isCapturing
             ]
             if let project = appState.activeProject {
                 result["activeProject"] = [
@@ -485,7 +480,6 @@ actor MCPToolExecutor {
                 "simulatorFPS": appState.settingsStore.simulatorFPS,
                 "showCursor": appState.settingsStore.showCursor,
                 "cursorSize": appState.settingsStore.cursorSize,
-                "recordingFormat": appState.settingsStore.recordingFormat,
                 "defaultSimulatorUDID": appState.settingsStore.defaultSimulatorUDID ?? ""
             ]
         }
@@ -497,7 +491,6 @@ actor MCPToolExecutor {
             if let fps = args["simulatorFPS"] as? Int { appState.settingsStore.simulatorFPS = fps }
             if let cursor = args["showCursor"] as? Bool { appState.settingsStore.showCursor = cursor }
             if let size = args["cursorSize"] as? Double { appState.settingsStore.cursorSize = size }
-            if let format = args["recordingFormat"] as? String { appState.settingsStore.recordingFormat = format }
         }
         return mcpText("Settings updated")
     }
@@ -505,18 +498,6 @@ actor MCPToolExecutor {
     private func executeSettingsSave() async -> [String: Any] {
         await MainActor.run { appState.settingsStore.save() }
         return mcpText("Settings saved to disk")
-    }
-
-    // MARK: - Recording Tools
-
-    private func executeRecordingStart() async -> [String: Any] {
-        await MainActor.run { appState.recordingManager.isRecording = true }
-        return mcpText("Recording started")
-    }
-
-    private func executeRecordingStop() async -> [String: Any] {
-        await MainActor.run { appState.recordingManager.isRecording = false }
-        return mcpText("Recording stopped")
     }
 
     // MARK: - ASC Form Tools
@@ -1363,6 +1344,58 @@ actor MCPToolExecutor {
         let appId = await MainActor.run { appState.ascManager.app?.id }
         let service = await MainActor.run { appState.ascManager.service }
 
+        // --- Pre-upload validation: build version & encryption key ---
+        var existingVersions: Set<String> = []
+        do {
+            // Extract IPA plist fields in one pass
+            let plistXML = try await ProcessRunner.run(
+                "/bin/bash",
+                arguments: ["-c", "unzip -p '\(ipaPath)' 'Payload/*.app/Info.plist' | plutil -convert xml1 -o - -"]
+            )
+
+            // Check CFBundleVersion
+            let ipaVersion: String? = {
+                guard let range = plistXML.range(of: "<key>CFBundleVersion</key>"),
+                      let valueStart = plistXML.range(of: "<string>", range: range.upperBound..<plistXML.endIndex),
+                      let valueEnd = plistXML.range(of: "</string>", range: valueStart.upperBound..<plistXML.endIndex) else { return nil }
+                return String(plistXML[valueStart.upperBound..<valueEnd.lowerBound])
+            }()
+
+            // Check ITSAppUsesNonExemptEncryption
+            let hasEncryptionKey = plistXML.contains("ITSAppUsesNonExemptEncryption")
+            if !hasEncryptionKey {
+                return mcpText(
+                    "Error: ITSAppUsesNonExemptEncryption is not set in the IPA's Info.plist. "
+                    + "Without this key, App Store Connect will require manual encryption compliance confirmation in the web UI after every upload. "
+                    + "Fix: add INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO to your Xcode build settings (both Debug and Release), then rebuild. "
+                    + "Or add <key>ITSAppUsesNonExemptEncryption</key><false/> directly to Info.plist."
+                )
+            }
+
+            // Validate build version against existing builds
+            if let ipaVersion, !ipaVersion.isEmpty, let appId, let service {
+                let builds = try await service.fetchBuilds(appId: appId)
+                existingVersions = Set(builds.map(\.attributes.version))
+                if existingVersions.contains(ipaVersion) {
+                    let maxVersion = existingVersions.compactMap { Int($0) }.max() ?? 0
+                    return mcpText(
+                        "Error: build version \(ipaVersion) already exists in App Store Connect. "
+                        + "Existing build versions: \(existingVersions.sorted().joined(separator: ", ")). "
+                        + "The next valid build version is \(maxVersion + 1). "
+                        + "Update CFBundleVersion in Info.plist (or CURRENT_PROJECT_VERSION in the Xcode build settings) and rebuild."
+                    )
+                }
+            }
+        } catch {
+            // Non-fatal — proceed with upload and let altool catch any issues
+        }
+
+        // If we didn't capture existing versions above, fetch them now for polling comparison
+        if existingVersions.isEmpty, let appId, let service {
+            existingVersions = Set((try? await service.fetchBuilds(appId: appId))?.map(\.attributes.version) ?? [])
+        }
+
+        // --- Upload ---
         await MainActor.run {
             appState.ascManager.buildPipelinePhase = .uploading
             appState.ascManager.buildPipelineMessage = "Uploading IPA…"
@@ -1371,6 +1404,7 @@ actor MCPToolExecutor {
         let pipeline = BuildPipelineService()
         let appStateRef = appState
         do {
+            // Always skip BuildPipelineService's built-in polling — we poll ourselves below
             let result = try await pipeline.uploadToTestFlight(
                 ipaPath: ipaPath,
                 keyId: credentials.keyId,
@@ -1378,38 +1412,94 @@ actor MCPToolExecutor {
                 privateKeyPEM: credentials.privateKey,
                 appId: appId,
                 ascService: service,
-                skipPolling: skipPolling,
+                skipPolling: true,
                 onProgress: { msg in
                     Task { @MainActor in
-                        if msg.contains("Poll") {
-                            appStateRef.ascManager.buildPipelinePhase = .processing
-                        }
                         appStateRef.ascManager.buildPipelineMessage = String(msg.prefix(120))
                     }
                 }
             )
 
-            // Auto-set usesNonExemptEncryption = false on the processed build
-            if let service, let appId {
-                if let latestBuild = try? await service.fetchLatestBuild(appId: appId) {
-                    try? await service.patchBuildEncryption(
-                        buildId: latestBuild.id,
-                        usesNonExemptEncryption: false
-                    )
+            var allLog = result.log
+            var finalState = result.processingState
+            var finalVersion = result.buildVersion
+
+            // --- Poll for new build to appear (every 10s, up to 300s) ---
+            if !skipPolling, let appId, let service {
+                await MainActor.run {
+                    appStateRef.ascManager.buildPipelinePhase = .processing
+                    appStateRef.ascManager.buildPipelineMessage = "Waiting for new build to appear…"
+                }
+
+                let pollInterval: TimeInterval = 10
+                let maxAttempts = 30 // 300 seconds total
+
+                for attempt in 1...maxAttempts {
+                    try? await Task.sleep(for: .seconds(pollInterval))
+
+                    guard let builds = try? await service.fetchBuilds(appId: appId) else { continue }
+
+                    if let newBuild = builds.first(where: { !existingVersions.contains($0.attributes.version) }) {
+                        let state = newBuild.attributes.processingState ?? "UNKNOWN"
+                        let version = newBuild.attributes.version
+                        let msg = "Poll \(attempt): build \(version) — \(state)"
+                        allLog.append(msg)
+                        await MainActor.run {
+                            appStateRef.ascManager.buildPipelineMessage = msg
+                            appStateRef.ascManager.builds = builds
+                        }
+
+                        finalVersion = version
+                        finalState = state
+
+                        if state == "VALID" {
+                            allLog.append("Build processing complete!")
+                            // Auto-set encryption exemption via API as backup
+                            try? await service.patchBuildEncryption(
+                                buildId: newBuild.id,
+                                usesNonExemptEncryption: false
+                            )
+                            // Auto-attach to pending version
+                            let versionId = await MainActor.run(body: {
+                                appStateRef.ascManager.pendingVersionId
+                            })
+                            if let versionId {
+                                do {
+                                    try await service.attachBuild(versionId: versionId, buildId: newBuild.id)
+                                    allLog.append("Build \(version) attached to app store version.")
+                                } catch {
+                                    allLog.append("Warning: could not auto-attach build \u{2014} \(error.localizedDescription)")
+                                }
+                            }
+                            break
+                        } else if state == "INVALID" {
+                            allLog.append("Build processing failed with INVALID state.")
+                            break
+                        }
+                        // Still processing — keep polling
+                    } else {
+                        let msg = "Poll \(attempt): new build not yet visible…"
+                        allLog.append(msg)
+                        await MainActor.run {
+                            appStateRef.ascManager.buildPipelineMessage = msg
+                        }
+                    }
                 }
             }
 
+            // --- Finalize: reset UI and refresh tab data ---
             await MainActor.run {
                 appState.ascManager.buildPipelinePhase = .idle
                 appState.ascManager.buildPipelineMessage = ""
             }
+            await appState.ascManager.refreshTabData(.builds)
 
             var response: [String: Any] = [
                 "success": true,
-                "processingState": result.processingState ?? "UNKNOWN",
-                "log": result.log
+                "processingState": finalState ?? "UNKNOWN",
+                "log": allLog
             ]
-            if let version = result.buildVersion {
+            if let version = finalVersion {
                 response["buildVersion"] = version
             }
             return mcpJSON(response)
