@@ -12,7 +12,6 @@ struct ApprovalRequest: Identifiable {
         case projectMutation
         case settingsMutation
         case simulatorControl
-        case recording
         case ascFormMutation
         case ascScreenshotMutation
         case ascSubmitMutation
@@ -26,7 +25,9 @@ struct ApprovalRequest: Identifiable {
         switch category {
         case .navigation, .query: return false
         default:
-            return permissionToggles[category.rawValue] ?? true
+            // Toggle ON (true) = user has approved this category = no approval popup needed
+            let approved = permissionToggles[category.rawValue] ?? false
+            return !approved
         }
     }
 }

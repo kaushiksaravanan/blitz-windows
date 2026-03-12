@@ -12,7 +12,6 @@ struct SettingsView: View {
         (.projectMutation, "Project mutations"),
         (.settingsMutation, "Settings mutations"),
         (.simulatorControl, "Simulator control"),
-        (.recording, "Recording"),
     ]
 
     var body: some View {
@@ -36,13 +35,6 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Recording") {
-                Picker("Format", selection: $settings.recordingFormat) {
-                    Text("MOV (H.264)").tag("mov")
-                    Text("MP4 (H.264)").tag("mp4")
-                }
-            }
-
             Section("Permissions") {
                 Toggle("Auto-navigate to tab on tool call", isOn: $settings.autoNavEnabled)
                     .onChange(of: settings.autoNavEnabled) { _, _ in settings.save() }
@@ -51,7 +43,7 @@ struct SettingsView: View {
 
                 Toggle("Approve all", isOn: Binding(
                     get: {
-                        gateableCategories.allSatisfy { settings.permissionToggles[$0.0.rawValue] ?? true }
+                        gateableCategories.allSatisfy { settings.permissionToggles[$0.0.rawValue] ?? false }
                     },
                     set: { newValue in
                         for (category, _) in gateableCategories {
@@ -64,7 +56,7 @@ struct SettingsView: View {
 
                 ForEach(gateableCategories, id: \.0.rawValue) { category, label in
                     Toggle(label, isOn: Binding(
-                        get: { settings.permissionToggles[category.rawValue] ?? true },
+                        get: { settings.permissionToggles[category.rawValue] ?? false },
                         set: { newValue in
                             settings.permissionToggles[category.rawValue] = newValue
                             settings.save()

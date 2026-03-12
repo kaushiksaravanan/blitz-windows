@@ -171,8 +171,6 @@ Upload an IPA to App Store Connect / TestFlight. Optionally polls until build pr
 | ipaPath | string | no | Path to IPA (uses latest app_store_build output if omitted) |
 | skipPolling | boolean | no | Skip waiting for build processing (default: false) |
 
-**Note on first-time IAP/Subscription submission:** Apple requires the first IAP or Subscription to be submitted together with an app version via the App Store Connect website. In ASC web: go to your app version, scroll to "In-App Purchases and Subscriptions", click "Select In-App Purchases or Subscriptions", check the items to include, then submit the version for review. After the first approval, future IAP/Subscription submissions can be done directly from Blitz.
-
 ### asc_set_app_price
 
 Set the app's price on the App Store.
@@ -184,7 +182,7 @@ Set the app's price on the App Store.
 
 ### asc_create_iap
 
-Create an in-app purchase. Creates the IAP, adds en-US localization, sets the price, and uploads a review screenshot. **You must take a screenshot first** — use `blitz-iphone` to capture the IAP content in the simulator (e.g. the purchase UI or content being unlocked), save to /tmp, then pass the path.
+Create an in-app purchase. Creates the IAP, adds en-US localization, and sets the price.
 
 | param | type | required | notes |
 |---|---|---|---|
@@ -193,12 +191,11 @@ Create an in-app purchase. Creates the IAP, adds en-US localization, sets the pr
 | type | string | yes | CONSUMABLE, NON_CONSUMABLE, or NON_RENEWING_SUBSCRIPTION |
 | displayName | string | yes | User-facing display name (en-US) |
 | price | string | yes | Price in USD (e.g. "0.99") |
-| screenshotPath | string | yes | Path to review screenshot (min 640x920px PNG/JPEG) |
 | description | string | no | User-facing description |
 
 ### asc_create_subscription
 
-Create an auto-renewable subscription. Creates or reuses a subscription group. **You must take a screenshot first** — use `blitz-iphone` to capture the subscription content in the simulator (e.g. the paywall or premium features screen), save to /tmp, then pass the path.
+Create an auto-renewable subscription. Creates or reuses a subscription group.
 
 | param | type | required | notes |
 |---|---|---|---|
@@ -208,7 +205,6 @@ Create an auto-renewable subscription. Creates or reuses a subscription group. *
 | displayName | string | yes | User-facing display name (en-US) |
 | duration | string | yes | ONE_WEEK, ONE_MONTH, TWO_MONTHS, THREE_MONTHS, SIX_MONTHS, ONE_YEAR |
 | price | string | yes | Price in USD (e.g. "4.99") |
-| screenshotPath | string | yes | Path to review screenshot (min 640x920px PNG/JPEG) |
 | description | string | no | User-facing description |
 
 ### Recommended full workflow (code + build + submission)
@@ -228,16 +224,3 @@ Create an auto-renewable subscription. Creates or reuses a subscription group. *
 5. `app_store_build`
 6. `app_store_upload`
 7. `asc_open_submit_preview` — fix any flagged missing fields, then submit
-
----
-
-## App Store Knowledge Base
-
-### WeatherKit Setup
-
-WeatherKit requires enablement in **two separate places** on the Apple Developer portal, or API calls will fail with a JWT authentication error:
-
-1. **Capabilities**: In [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/identifiers/list) > Identifiers, select the app's bundle ID (or create a new one via "+" > App IDs), go to the Capabilities tab, and enable **WeatherKit**.
-2. **App Services**: On the same identifier page, switch to the App Services tab and enable **WeatherKit** there as well.
-
-Both must be enabled — enabling only Capabilities will result in a JWT auth error at runtime.

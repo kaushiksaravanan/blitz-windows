@@ -117,12 +117,11 @@ enum MCPToolRegistry {
 
         tools.append(tool(
             name: "settings_update",
-            description: "Update app settings (FPS, cursor, recording format)",
+            description: "Update app settings (FPS, cursor)",
             properties: [
                 "simulatorFPS": ["type": "integer", "description": "Frame rate (30 or 60)"],
                 "showCursor": ["type": "boolean", "description": "Show cursor overlay"],
-                "cursorSize": ["type": "number", "description": "Cursor size in pixels"],
-                "recordingFormat": ["type": "string", "description": "Recording format", "enum": ["mov", "mp4"]]
+                "cursorSize": ["type": "number", "description": "Cursor size in pixels"]
             ],
             required: []
         ))
@@ -130,21 +129,6 @@ enum MCPToolRegistry {
         tools.append(tool(
             name: "settings_save",
             description: "Save current settings to disk",
-            properties: [:],
-            required: []
-        ))
-
-        // -- Recording --
-        tools.append(tool(
-            name: "recording_start",
-            description: "Start screen recording",
-            properties: [:],
-            required: []
-        ))
-
-        tools.append(tool(
-            name: "recording_stop",
-            description: "Stop screen recording",
             properties: [:],
             required: []
         ))
@@ -312,8 +296,6 @@ enum MCPToolRegistry {
             return .simulatorControl
         case "settings_update", "settings_save":
             return .settingsMutation
-        case "recording_start", "recording_stop":
-            return .recording
 
         // ASC mutation tools
         case "asc_fill_form":

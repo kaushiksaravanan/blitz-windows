@@ -116,7 +116,6 @@ final class AppState {
     var projectManager = ProjectManager()
     var simulatorManager = SimulatorManager()
     var simulatorStream = SimulatorStreamManager()
-    var recordingManager = RecordingManager()
     var issueStore = IssueStore()
     var settingsStore = SettingsService.shared
     var databaseManager = DatabaseManager()
@@ -338,13 +337,6 @@ final class SimulatorStreamManager {
     }
 }
 
-@MainActor
-@Observable
-final class RecordingManager {
-    var isRecording = false
-    var duration: TimeInterval = 0
-    var recentRecordings: [RecordingMeta] = []
-}
 
 @MainActor
 @Observable
