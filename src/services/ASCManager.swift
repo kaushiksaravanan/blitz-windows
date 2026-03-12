@@ -111,10 +111,13 @@ final class ASCManager {
             fields.append(.init(label: "Demo Account Password", value: review?.attributes.demoAccountPassword))
         }
 
+        let iphoneCount = iphoneScreenshots.map { screenshots[$0.id]?.count ?? $0.attributes.screenshotCount ?? 0 } ?? 0
+        let ipadCount = ipadScreenshots.map { screenshots[$0.id]?.count ?? $0.attributes.screenshotCount ?? 0 } ?? 0
+
         fields.append(contentsOf: [
             .init(label: "App Icon", value: appIconStatus),
-            .init(label: "iPhone Screenshots", value: iphoneScreenshots != nil ? "\(iphoneScreenshots!.attributes.screenshotCount ?? 0) screenshot(s)" : nil),
-            .init(label: "iPad Screenshots", value: ipadScreenshots != nil ? "\(ipadScreenshots!.attributes.screenshotCount ?? 0) screenshot(s)" : nil),
+            .init(label: "iPhone Screenshots", value: iphoneScreenshots != nil ? "\(iphoneCount) screenshot(s)" : nil),
+            .init(label: "iPad Screenshots", value: ipadScreenshots != nil ? "\(ipadCount) screenshot(s)" : nil),
             .init(label: "Privacy Nutrition Labels", value: nil, required: false, actionUrl: privacyUrl),
             .init(label: "Build", value: builds.first?.attributes.version),
         ])
@@ -323,7 +326,11 @@ final class ASCManager {
                 reviewDetail = try? await service.fetchReviewDetail(versionId: latestId)
                 let locs = localizations
                 if let firstLocId = locs.first?.id {
-                    screenshotSets = try await service.fetchScreenshotSets(localizationId: firstLocId)
+                    let sets = try await service.fetchScreenshotSets(localizationId: firstLocId)
+                    screenshotSets = sets
+                    for set in sets {
+                        screenshots[set.id] = try await service.fetchScreenshots(setId: set.id)
+                    }
                 }
             }
             if let infoId = appInfo?.id {
