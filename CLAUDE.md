@@ -14,10 +14,7 @@ swift build -c release
 # Bundle as macOS .app (signs with Developer ID)
 bash scripts/bundle.sh release
 
-# Build Node.js sidecar (must run before bundle if sidecar is needed)
-npm run build:sidecar
-
-# Full release: bump version, build sidecar, bundle app, build pkg, deploy
+# Full release: bump version, bundle app, build pkg, deploy
 npm run release
 
 # Run tests
@@ -36,7 +33,7 @@ bash scripts/build-pkg.sh
 
 ### Single-target structure
 
-All Swift source lives in `src/`. Core types (process execution, simulator control, device interaction, project metadata, sidecar protocol) live alongside UI, services, and the MCP server in one executable target.
+All Swift source lives in `src/`. Core types (process execution, simulator control, device interaction, project metadata) live alongside UI, services, and the MCP server in one executable target.
 
 ### App State
 
@@ -71,10 +68,6 @@ Two paths depending on target device:
 
 `DeviceInteractionService` is the unified actor that dispatches to either path.
 
-### Node.js Sidecar
-
-`NodeSidecarService` manages a Node.js child process that communicates via Unix domain socket (`/tmp/blitz-{pid}.sock`). Used for project scaffolding and runtime management (Metro/Vite). The sidecar binary is bundled into the .app at `Contents/Resources/dist/server/`.
-
 ### Screen Capture
 
 `SimulatorCaptureService` uses `ScreenCaptureKit` (SCStream) to capture the Simulator.app window. Frames are rendered via `MetalRenderer` using a Metal pipeline. Stream pauses/resumes on tab switches to conserve resources.
@@ -85,7 +78,7 @@ Projects are stored at `~/Library/Application Support/Blitz/projects/{projectId}
 
 ## Key Patterns
 
-- All services that need isolation use Swift `actor` (e.g., `MCPServerService`, `NodeSidecarService`, `DeviceInteractionService`)
+- All services that need isolation use Swift `actor` (e.g., `MCPServerService`, `DeviceInteractionService`)
 - UI mutations go through `@MainActor` / `MainActor.run`
 - External processes are managed via `ProcessRunner.run()` (async one-shot) or `ProcessRunner.stream()` (long-running with stdout/stderr callbacks, returns `ManagedProcess`)
 - The app uses `@Observable` (Observation framework) rather than `ObservableObject`/`@Published`

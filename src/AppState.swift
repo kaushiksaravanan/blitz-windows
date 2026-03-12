@@ -124,10 +124,7 @@ var settingsStore = SettingsService.shared
     var showNewProjectSheet = false
     var showImportProjectSheet = false
 
-    // Active runtime
-    var activeRuntime: ProjectRuntime?
-
-    // MCP approval flow
+// MCP approval flow
     var pendingApproval: ApprovalRequest?
     var showApprovalAlert: Bool = false
     var toolExecutor: MCPToolExecutor?

@@ -37,7 +37,7 @@ struct BuildsView: View {
                             .tag(build.id)
                     }
                 }
-                .listStyle(.sidebar)
+                .listStyle(.inset)
                 .frame(minWidth: 280, idealWidth: 320)
 
                 // Detail panel

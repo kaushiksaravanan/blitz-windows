@@ -22,6 +22,6 @@ struct DatabaseTableList: View {
             .tag(table)
             .contentShape(Rectangle())
         }
-        .listStyle(.sidebar)
+        .listStyle(.inset)
     }
 }

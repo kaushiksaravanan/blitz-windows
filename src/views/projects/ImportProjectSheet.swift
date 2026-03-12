@@ -64,8 +64,7 @@ struct ImportProjectSheet: View {
         errorMessage = nil
         defer { isImporting = false }
 
-        // TODO: Call sidecar to import project
-        // For now, just create metadata
+        // Create metadata for imported project
         let url = URL(fileURLWithPath: projectPath)
         let name = url.lastPathComponent
 

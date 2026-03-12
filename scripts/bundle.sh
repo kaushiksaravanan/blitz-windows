@@ -1,7 +1,6 @@
 #!/bin/bash
 # Creates a proper macOS .app bundle from the SPM build.
 # Signs with Developer ID so TCC grants persist across rebuilds.
-# Also bundles the Node.js sidecar (dist/server/) into Resources.
 set -e
 
 CONFIG="${1:-release}"
@@ -42,19 +41,6 @@ for bundle_dir in .build/${CONFIG}/*.bundle; do
         cp -R "$bundle_dir" "$BUNDLE_DIR/Contents/Resources/"
     fi
 done
-
-# Bundle the Node.js sidecar server (built by build-server.mjs)
-SIDECAR_SRC="$ROOT_DIR/dist/server"
-if [ -d "$SIDECAR_SRC" ]; then
-    echo "Bundling Node.js sidecar..."
-    mkdir -p "$BUNDLE_DIR/Contents/Resources/dist"
-    # Use ditto to avoid ._  Apple Double files
-    ditto "$SIDECAR_SRC" "$BUNDLE_DIR/Contents/Resources/dist/server"
-    echo "  Sidecar bundled at: $BUNDLE_DIR/Contents/Resources/dist/server/"
-else
-    echo "WARNING: dist/server not found — run 'npm run build:sidecar' first."
-    echo "         The app will launch but the Node.js sidecar will not work."
-fi
 
 # Write Info.plist with correct version
 cat > "$BUNDLE_DIR/Contents/Info.plist" << PLIST

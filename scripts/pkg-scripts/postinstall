@@ -77,10 +77,6 @@ echo "Console user: $CONSOLE_USER (UID $CONSOLE_UID, home $CONSOLE_HOME)" >> "$L
 
 APP_DIR="/Applications/Blitz.app"
 RESOURCES_DIR="$APP_DIR/Contents/Resources"
-SERVER_DIR="$RESOURCES_DIR/dist/server"
-
-# Read warm template version from bundled template
-WARM_TEMPLATE_VERSION=$(cat "$SERVER_DIR/template/.blitz-template-version" 2>/dev/null || echo "0")
 
 # ============================================================================
 # Install Node.js runtime to ~/.blitz/node-runtime
@@ -148,18 +144,6 @@ if [ "$IS_ROOT" = true ]; then
     chown -R "$CONSOLE_USER" "$APP_DIR" 2>/dev/null || true
     echo "Chowned $APP_DIR to $CONSOLE_USER" >> "$LOG"
 fi
-
-# ============================================================================
-# Verify server dependencies (pre-installed at build time by build-server.mjs)
-# ============================================================================
-
-T_STEP=$(date +%s)
-if [ -d "$SERVER_DIR/node_modules" ]; then
-    echo "Server dependencies found (pre-installed)" >> "$LOG"
-else
-    echo "WARNING: Server node_modules not found at $SERVER_DIR/node_modules" >> "$LOG"
-fi
-echo "TIMING: server deps check took $(( $(date +%s) - T_STEP ))s" >> "$LOG"
 
 # ============================================================================
 # Create user directories
@@ -392,24 +376,6 @@ fi
 echo "TIMING: python + idb took $(( $(date +%s) - T_IDB_START ))s" >> "$LOG"
 
 
-# ============================================================================
-# Build ax-scan (accessibility scanner, needs idb-companion frameworks)
-# ============================================================================
-
-AX_SCAN_BIN="$CONSOLE_HOME/.blitz/bin/ax-scan"
-AX_SCAN_SRC="$SERVER_DIR/ax-scan"
-
-if [ ! -x "$AX_SCAN_BIN" ] && [ -f "$AX_SCAN_SRC/ax-scan.m" ] && [ -d "$BLITZ_IDB_COMPANION_DIR/Frameworks" ]; then
-    echo "Building ax-scan from source..." >> "$LOG"
-    if run_as_user make -C "$AX_SCAN_SRC" install HOME="$CONSOLE_HOME" 2>> "$LOG"; then
-        echo "OK: ax-scan installed to $AX_SCAN_BIN" >> "$LOG"
-    else
-        echo "WARNING: Failed to build ax-scan" >> "$LOG"
-    fi
-elif [ -x "$AX_SCAN_BIN" ]; then
-    echo "OK: ax-scan already installed at $AX_SCAN_BIN" >> "$LOG"
-fi
-
 
 # ============================================================================
 # Install Claude Code CLI
@@ -512,10 +478,6 @@ else
     fi
 fi
 echo "TIMING: WebDriverAgent clone took $(( $(date +%s) - T_WDA_START ))s" >> "$LOG"
-
-
-# Warm template build is deferred to first "New App" creation (on-demand).
-echo "Warm template will be built on first New App creation" >> "$LOG"
 
 # ============================================================================
 # Launch Blitz.app

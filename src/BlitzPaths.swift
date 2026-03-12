@@ -37,8 +37,4 @@ enum BlitzPaths {
         root.appendingPathComponent("idb-companion/bin/idb_companion")
     }
 
-    /// Node runtime: ~/.blitz/node-runtime/bin/node
-    static var nodeRuntime: URL {
-        root.appendingPathComponent("node-runtime/bin/node")
-    }
 }
