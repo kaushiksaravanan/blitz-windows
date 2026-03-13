@@ -50,12 +50,28 @@ if [ -f "$ICON_PNG" ]; then
     echo "Generated AppIcon.icns"
 fi
 
-# Copy Metal shader resources
+# Copy SPM resource bundles into Contents/Resources/ (standard macOS location).
+# NOTE: SPM's generated Bundle.module uses bundleURL (= .app root) which won't find
+# bundles here. We use a custom Bundle.appResources accessor instead — see AppBundle.swift.
 for bundle_dir in .build/${CONFIG}/*.bundle; do
     if [ -d "$bundle_dir" ]; then
         cp -R "$bundle_dir" "$BUNDLE_DIR/Contents/Resources/"
+        echo "Copied $(basename "$bundle_dir") to Contents/Resources/"
     fi
 done
+
+# Embed pkg-scripts in .app for auto-updater (mirrors Tauri pattern)
+PKG_SCRIPTS_SRC="$ROOT_DIR/scripts/pkg-scripts"
+PKG_SCRIPTS_DST="$BUNDLE_DIR/Contents/Resources/pkg-scripts"
+if [ -d "$PKG_SCRIPTS_SRC" ]; then
+    mkdir -p "$PKG_SCRIPTS_DST"
+    for script in "$PKG_SCRIPTS_SRC"/*; do
+        [ -f "$script" ] || continue
+        cp "$script" "$PKG_SCRIPTS_DST/"
+        chmod 755 "$PKG_SCRIPTS_DST/$(basename "$script")"
+    done
+    echo "Embedded pkg-scripts in .app bundle"
+fi
 
 # Write Info.plist with correct version
 cat > "$BUNDLE_DIR/Contents/Info.plist" << PLIST

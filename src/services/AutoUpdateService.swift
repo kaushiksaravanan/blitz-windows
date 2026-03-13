@@ -1,0 +1,201 @@
+import AppKit
+import Foundation
+
+/// Handles checking for updates, downloading, and installing them.
+/// Mirrors the Tauri updater approach: fetch latest.json, download .app.zip,
+/// replace /Applications/Blitz.app via osascript, relaunch.
+@MainActor
+@Observable
+final class AutoUpdateManager {
+    enum State: Equatable {
+        case idle
+        case checking
+        case available(version: String, releaseNotes: String)
+        case downloading(percent: Int)
+        case installing
+        case failed(String)
+    }
+
+    var state: State = .idle
+
+    var isUpdateAvailable: Bool {
+        if case .available = state { return true }
+        return false
+    }
+
+    private var latestVersion: String?
+    private var downloadURL: String?
+    private var downloadFilename: String?
+
+    private static let latestURL = "https://api.blitzapp.dev/download/releases/apps/com.blitz.macos/latest.json"
+    private static let baseURL = "https://api.blitzapp.dev/download/releases/"
+
+    /// Current app version from Info.plist (falls back to "0.0.0" in dev builds).
+    var currentVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+    }
+
+    // MARK: - Check
+
+    func checkForUpdate() async {
+        state = .checking
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: URL(string: Self.latestURL)!)
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let remoteVersion = json["version"] as? String else {
+                state = .idle
+                return
+            }
+
+            // Prefer .app.zip from "app" object, fall back to top-level .pkg
+            let appObj = json["app"] as? [String: Any]
+            let path = (appObj?["path"] as? String) ?? (json["path"] as? String)
+            let filename = (appObj?["filename"] as? String) ?? (json["filename"] as? String)
+
+            guard let path, let filename else {
+                state = .idle
+                return
+            }
+
+            guard Self.isNewer(remote: remoteVersion, current: currentVersion) else {
+                print("[AutoUpdate] Up to date (current: \(currentVersion), remote: \(remoteVersion))")
+                state = .idle
+                return
+            }
+
+            print("[AutoUpdate] Update available: \(currentVersion) -> \(remoteVersion)")
+            latestVersion = remoteVersion
+            downloadURL = Self.baseURL + path
+            downloadFilename = filename
+
+            let notes = json["release_notes"] as? String ?? ""
+            state = .available(version: remoteVersion, releaseNotes: notes)
+        } catch {
+            print("[AutoUpdate] Check failed: \(error)")
+            state = .idle
+        }
+    }
+
+    // MARK: - Download & Install
+
+    func performUpdate() async {
+        guard let url = downloadURL, let filename = downloadFilename else { return }
+
+        state = .downloading(percent: 0)
+
+        do {
+            let zipPath = try await downloadApp(url: url, filename: filename)
+            state = .installing
+            try await installApp(zipPath: zipPath)
+            // If we get here, the app is about to relaunch
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
+    }
+
+    func dismiss() {
+        state = .idle
+    }
+
+    // MARK: - Private
+
+    private func downloadApp(url: String, filename: String) async throws -> URL {
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        // Remove stale download
+        try? FileManager.default.removeItem(at: destination)
+
+        let (asyncBytes, response) = try await URLSession.shared.bytes(from: URL(string: url)!)
+
+        let totalBytes = (response as? HTTPURLResponse)
+            .flatMap { Int($0.value(forHTTPHeaderField: "Content-Length") ?? "") } ?? 0
+
+        var data = Data()
+        data.reserveCapacity(totalBytes > 0 ? totalBytes : 50_000_000)
+
+        var lastReportedPercent = 0
+        for try await byte in asyncBytes {
+            data.append(byte)
+            if totalBytes > 0 {
+                let percent = Int(Double(data.count) / Double(totalBytes) * 100)
+                if percent != lastReportedPercent {
+                    lastReportedPercent = percent
+                    state = .downloading(percent: min(percent, 100))
+                }
+            }
+        }
+
+        try data.write(to: destination)
+        print("[AutoUpdate] Downloaded \(data.count) bytes to \(destination.path)")
+        return destination
+    }
+
+    private func installApp(zipPath: URL) async throws {
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let zip = zipPath.path.replacingOccurrences(of: "'", with: "'\\''")
+
+        // AppleScript statement 1: unzip, run preinstall, replace app, run postinstall
+        // The PKG postinstall chowns Blitz.app to the current user, so no admin needed.
+        // Pre/postinstall scripts are embedded in the .app at Contents/Resources/pkg-scripts/.
+        let installScript = """
+        do shell script "\
+        TMPZIP='\(zip)'; \
+        UNZIP_DIR=$(mktemp -d); \
+        unzip -qo \\"$TMPZIP\\" -d \\"$UNZIP_DIR\\"; \
+        APP_SRC=$(find \\"$UNZIP_DIR\\" -maxdepth 1 -name '*.app' -type d | head -1); \
+        if [ -z \\"$APP_SRC\\" ]; then rm -rf \\"$UNZIP_DIR\\"; exit 1; fi; \
+        PREINSTALL=\\"$APP_SRC/Contents/Resources/pkg-scripts/preinstall\\"; \
+        if [ -x \\"$PREINSTALL\\" ]; then \\"$PREINSTALL\\" '' '' '/' >> /tmp/blitz_install.log 2>&1 || true; fi; \
+        rm -rf /Applications/Blitz.app; \
+        mv \\"$APP_SRC\\" /Applications/Blitz.app; \
+        POSTINSTALL='/Applications/Blitz.app/Contents/Resources/pkg-scripts/postinstall'; \
+        if [ -x \\"$POSTINSTALL\\" ]; then \\"$POSTINSTALL\\" '' '' '/' >> /tmp/blitz_install.log 2>&1 || true; fi; \
+        rm -rf \\"$UNZIP_DIR\\" \\"$TMPZIP\\"\
+        "
+        """
+
+        // AppleScript statement 2: background wait-for-exit + relaunch
+        let relaunchScript = """
+        do shell script "(while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done; open /Applications/Blitz.app) &>/dev/null &"
+        """
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", installScript, "-e", relaunchScript]
+        process.standardOutput = nil
+        process.standardError = nil
+
+        try process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            throw UpdateError(message: "Installation failed (exit code \(process.terminationStatus))")
+        }
+
+        // Exit the current app so the background relaunch can kick in
+        await MainActor.run {
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    /// Simple semver comparison (major.minor.patch).
+    private static func isNewer(remote: String, current: String) -> Bool {
+        let parse = { (v: String) -> [Int] in
+            v.trimmingCharacters(in: .whitespaces)
+             .replacingOccurrences(of: "v", with: "")
+             .split(separator: ".")
+             .compactMap { Int($0) }
+        }
+        let r = parse(remote)
+        let c = parse(current)
+        guard r.count >= 3, c.count >= 3 else { return false }
+        if r[0] != c[0] { return r[0] > c[0] }
+        if r[1] != c[1] { return r[1] > c[1] }
+        return r[2] > c[2]
+    }
+
+    struct UpdateError: LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+}

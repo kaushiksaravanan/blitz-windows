@@ -33,7 +33,6 @@ struct BlitzProjectMetadata: Codable, Sendable {
 }
 
 enum ProjectType: String, Codable, Sendable, CaseIterable {
-    case blitz
     case reactNative = "react-native"
     case swift
     case flutter

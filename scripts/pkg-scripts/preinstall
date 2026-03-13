@@ -65,12 +65,46 @@ fi
 ERRORS=()
 
 # ============================================================================
-# 0. Reset TCC permissions (first install only)
+# 0a. Clean up old Tauri-based Blitz app (dev.blitz.mac)
+# The Tauri app has a different bundle ID and icon — remove it to avoid
+# confusion with the new native app.
+# ============================================================================
+
+OLD_TAURI_APP="/Applications/Blitz.app"
+OLD_TAURI_ID="dev.blitz.mac"
+# Check if the existing Blitz.app is the OLD Tauri version (different bundle ID)
+if [ -d "$OLD_TAURI_APP" ]; then
+    EXISTING_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$OLD_TAURI_APP/Contents/Info.plist" 2>/dev/null || echo "")
+    if [ "$EXISTING_ID" = "$OLD_TAURI_ID" ]; then
+        echo "Found old Tauri Blitz app ($OLD_TAURI_ID), cleaning up..." >> "$LOG"
+        # Kill old app if running
+        killall Blitz 2>/dev/null || true
+        # Remove old app
+        rm -rf "$OLD_TAURI_APP"
+        echo "Removed old Tauri Blitz.app" >> "$LOG"
+        # Reset TCC permissions for the old bundle ID
+        tccutil reset ScreenCapture "$OLD_TAURI_ID" >> "$LOG" 2>&1 || true
+        tccutil reset Accessibility "$OLD_TAURI_ID" >> "$LOG" 2>&1 || true
+        echo "TCC entries reset for $OLD_TAURI_ID" >> "$LOG"
+    fi
+fi
+
+# ============================================================================
+# 0b. Reset TCC permissions (first install only)
 # With Developer ID signing, TCC entries persist across binary replacement
 # (matched on team ID, not CDHash). Only reset on first install.
 # ============================================================================
 
-if [ ! -d "/Applications/Blitz.app" ]; then
+# Check if a native Blitz.app (com.blitz.macos) is already installed
+NATIVE_EXISTS=false
+if [ -d "/Applications/Blitz.app" ]; then
+    EXISTING_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "/Applications/Blitz.app/Contents/Info.plist" 2>/dev/null || echo "")
+    if [ "$EXISTING_ID" = "com.blitz.macos" ]; then
+        NATIVE_EXISTS=true
+    fi
+fi
+
+if [ "$NATIVE_EXISTS" = false ]; then
     echo "First install, resetting any stale TCC entries..." >> "$LOG"
     tccutil reset ScreenCapture com.blitz.macos >> "$LOG" 2>&1 || true
     tccutil reset Accessibility com.blitz.macos >> "$LOG" 2>&1 || true

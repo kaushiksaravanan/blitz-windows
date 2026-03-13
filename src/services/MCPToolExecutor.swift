@@ -371,7 +371,7 @@ actor MCPToolExecutor {
 
         try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
 
-        let projectType = ProjectType(rawValue: typeStr) ?? .blitz
+        let projectType = ProjectType(rawValue: typeStr) ?? .reactNative
         let metadata = BlitzProjectMetadata(
             name: name,
             type: projectType,
@@ -382,7 +382,7 @@ actor MCPToolExecutor {
         storage.ensureMCPConfig(projectId: projectId)
         await appState.projectManager.loadProjects()
 
-        // Set pending setup so ContentView triggers warm template scaffolding
+        // Set pending setup so ContentView triggers template scaffolding
         await MainActor.run {
             appState.projectSetup.pendingSetupProjectId = projectId
             appState.activeProjectId = projectId

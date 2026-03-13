@@ -2,7 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var settings: SettingsService
-    var appState: AppState
+    @Bindable var appState: AppState
     var mcpServer: MCPServerService?
 
     private let gateableCategories: [(ApprovalRequest.ToolCategory, String)] = [
@@ -64,6 +64,16 @@ struct SettingsView: View {
             }
 
             MCPSetupSection(mcpServer: mcpServer)
+
+            Section("Updates") {
+                UpdateBanner(autoUpdate: appState.autoUpdate)
+
+                if case .idle = appState.autoUpdate.state {
+                    Button("Check for Updates") {
+                        Task { await appState.autoUpdate.checkForUpdate() }
+                    }
+                }
+            }
 
             Section("About") {
                 HStack {

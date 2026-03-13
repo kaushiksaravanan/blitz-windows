@@ -23,9 +23,6 @@ struct ProjectStorage {
             let isDir = (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
             guard isDir else { continue }
 
-            // Skip warm template directories
-            if entry.lastPathComponent.hasPrefix(".blitz-template-warm-") { continue }
-
             let metadataFile = entry.appendingPathComponent(".blitz/project.json")
             guard let data = try? Data(contentsOf: metadataFile),
                   let metadata = try? decoder.decode(BlitzProjectMetadata.self, from: data) else {
@@ -144,9 +141,17 @@ struct ProjectStorage {
             "command": "bash",
             "args": [bridgePath]
         ]
+        // Use full path to npx from Blitz's bundled Node.js runtime.
+        // Also set PATH env so that #!/usr/bin/env node resolves correctly —
+        // npx and the packages it runs use env shebang lookups.
+        let nodeRuntimeBin = BlitzPaths.root
+            .appendingPathComponent("node-runtime/bin").path
         let blitzIphoneEntry: [String: Any] = [
-            "command": "npx",
-            "args": ["-y", "@blitzdev/iphone-mcp"]
+            "command": nodeRuntimeBin + "/npx",
+            "args": ["-y", "@blitzdev/iphone-mcp"],
+            "env": [
+                "PATH": "\(nodeRuntimeBin):/usr/bin:/bin:/usr/sbin:/sbin"
+            ]
         ]
 
         var root: [String: Any]
@@ -208,7 +213,7 @@ struct ProjectStorage {
     }
 
     private static func claudeMdContent(projectType: ProjectType) -> String {
-        guard let templateURL = Bundle.module.url(forResource: "CLAUDE.md", withExtension: "template"),
+        guard let templateURL = Bundle.appResources.url(forResource: "CLAUDE.md", withExtension: "template"),
               var template = try? String(contentsOf: templateURL, encoding: .utf8) else {
             return "# Blitz AI Agent Guide\n"
         }
@@ -217,23 +222,6 @@ struct ProjectStorage {
             ? "Swift Project — Blitz AI Agent Guide"
             : "React Native Project — Blitz AI Agent Guide"
         template = template.replacingOccurrences(of: "{{PROJECT_TYPE_HEADER}}", with: header)
-
-        let rnWarnings = projectType == .reactNative
-            ? "- **Do not run `xcodebuild` or `react-native run-ios`** — Blitz handles builds\n- **Do not start Metro** (`npx react-native start`) — Blitz runs Metro automatically\n"
-            : ""
-        template = template.replacingOccurrences(of: "{{REACT_NATIVE_BUILD_WARNINGS}}\n", with: rnWarnings)
-
-        let metroSection = projectType == .reactNative
-            ? """
-
-            ### Metro Bundler
-
-            Metro is managed automatically by Blitz. **DO NOT start your own Metro server** — it will conflict.
-            - `.blitz/metro.json` contains the active Metro port and bundle URL
-            - `.blitz/metro.log` contains Metro/app logs (including console.log from your app)
-            """
-            : ""
-        template = template.replacingOccurrences(of: "{{METRO_SECTION}}", with: metroSection)
 
         return template
     }
@@ -248,8 +236,6 @@ struct ProjectStorage {
         for entry in entries {
             let isDir = (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
             guard isDir else { continue }
-            if entry.lastPathComponent.hasPrefix(".blitz-template-warm-") { continue }
-
             let projectId = entry.lastPathComponent
             guard var metadata = readMetadata(projectId: projectId) else { continue }
             metadata.lastOpenedAt = nil

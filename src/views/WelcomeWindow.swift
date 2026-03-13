@@ -18,6 +18,7 @@ struct WelcomeWindow: View {
             if appState.projectManager.projects.isEmpty {
                 await appState.projectManager.loadProjects()
             }
+            await appState.autoUpdate.checkForUpdate()
         }
         .onChange(of: appState.activeProjectId) { _, newValue in
             if let projectId = newValue {
@@ -41,7 +42,7 @@ struct WelcomeWindow: View {
             Spacer()
 
             Group {
-                if let icon = Bundle.module.image(forResource: "blitz-icon") {
+                if let icon = Bundle.appResources.image(forResource: "blitz-icon") {
                     Image(nsImage: icon)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -85,18 +86,14 @@ struct WelcomeWindow: View {
                 )
             }
 
+            UpdateBanner(autoUpdate: appState.autoUpdate)
+
             Spacer()
         }
         .padding(.horizontal, 24)
         .frame(maxWidth: .infinity)
         .frame(width: 700 * 0.45)
-        .background(
-            LinearGradient(
-                colors: [Color(white: 0.1), Color(white: 0.15)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        .background(.regularMaterial)
     }
 
     // MARK: - Right Panel
@@ -172,10 +169,10 @@ struct WelcomeWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
     }
 
@@ -212,7 +209,6 @@ struct WelcomeWindow: View {
 
     private func projectIcon(_ type: ProjectType) -> String {
         switch type {
-        case .blitz: return "bolt.fill"
         case .reactNative: return "atom"
         case .swift: return "swift"
         case .flutter: return "bird"

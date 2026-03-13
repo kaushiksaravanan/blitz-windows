@@ -2,13 +2,7 @@
 
 ## blitz-macos
 
-This project is opened in **Blitz**, a native macOS iOS development IDE with integrated simulator streaming. The user sees Build, Release, Insights, Testflight tab groups, and can see simulator view in Build>Simulator tab. Blitz manages the build pipeline, simulator lifecycle, and mcp Ser ver — you focus on writing code.
-
-### Important: What Blitz Manages (Do NOT Do These Manually)
-
-- **Do not start the iOS simulator** — Blitz boots and manages it
-{{REACT_NATIVE_BUILD_WARNINGS}}
-- **Do not modify build settings or signing** — managed by Blitz
+This project is opened in **Blitz**, a native macOS iOS development IDE with integrated simulator streaming. The user sees Build, Release, Insights, Testflight tab groups, and can see simulator view in Build>Simulator tab.
 
 ### MCP Servers
 
@@ -59,8 +53,6 @@ curl -s -X POST "$DB_URL/api/v1/table/TABLE_NAME/delete" \
 ```
 
 The `ADMIN_SERVICE_TOKEN` is in the project's `.dev.vars` file.
-
-{{METRO_SECTION}}
 
 ---
 

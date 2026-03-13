@@ -43,7 +43,7 @@ struct SwiftProjectSetupService {
         await onStep(.copying)
         print("[swift-setup] Scaffolding: appName=\(appName) bundleId=\(bundleId)")
 
-        guard let templateURL = Bundle.module.url(forResource: "swift-hello-template", withExtension: nil, subdirectory: "Templates") else {
+        guard let templateURL = Bundle.appResources.url(forResource: "swift-hello-template", withExtension: nil, subdirectory: "templates") else {
             throw ProjectSetupService.SetupError(message: "Bundled Swift template not found")
         }
 

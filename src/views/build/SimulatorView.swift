@@ -8,6 +8,7 @@ struct SimulatorView: View {
     private var stream: SimulatorStreamManager { appState.simulatorStream }
     @State private var deviceInteraction = DeviceInteractionService()
     @State private var keyMonitor: Any?
+    @State private var showConnectAI = false
 
     /// Get the device config for the currently booted simulator
     private var deviceConfig: SimulatorDeviceConfig {
@@ -142,6 +143,16 @@ struct SimulatorView: View {
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 DeviceSelectorView(appState: appState)
+            }
+
+            ToolbarItem(placement: .navigation) {
+                Button(action: { showConnectAI.toggle() }) {
+                    Label("Connect AI", systemImage: "sparkles")
+                }
+                .help("Connect AI agent")
+                .popover(isPresented: $showConnectAI, arrowEdge: .bottom) {
+                    ConnectAIPopover(projectPath: appState.activeProject?.path)
+                }
             }
 
             ToolbarItem(placement: .primaryAction) {

@@ -47,11 +47,21 @@ final class MCPBootstrap {
             let script = """
             #!/bin/bash
             PORT_FILE="$HOME/.blitz/mcp-port"
+            WAITED=0
+            while [ ! -f "$PORT_FILE" ] && [ "$WAITED" -lt 10 ]; do
+                sleep 1
+                WAITED=$((WAITED + 1))
+            done
             if [ ! -f "$PORT_FILE" ]; then
                 echo '{"jsonrpc":"2.0","id":1,"error":{"code":-1,"message":"Blitz is not running."}}' >&2
                 exit 1
             fi
             PORT=$(cat "$PORT_FILE")
+            WAITED=0
+            while ! curl -s -o /dev/null -w '' "http://127.0.0.1:${PORT}/mcp" 2>/dev/null && [ "$WAITED" -lt 5 ]; do
+                sleep 1
+                WAITED=$((WAITED + 1))
+            done
             while IFS= read -r line; do
                 [ -z "$line" ] && continue
                 response=$(curl -s -X POST "http://127.0.0.1:${PORT}/mcp" \\
@@ -78,7 +88,7 @@ final class BlitzAppDelegate: NSObject, NSApplicationDelegate {
             fileMenu.title = "Project"
         }
         // Set dock icon from bundled resource (needed for swift run / non-.app launches)
-        if let icon = Bundle.module.image(forResource: "blitz-icon") {
+        if let icon = Bundle.appResources.image(forResource: "blitz-icon") {
             NSApp.applicationIconImage = icon
         }
     }
@@ -89,7 +99,16 @@ final class BlitzAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         MCPBootstrap.shared.shutdown()
-        appState?.simulatorManager.shutdownBooted()
+        // Don't block termination with synchronous simctl shutdown —
+        // this prevents macOS TCC "Quit & Reopen" from relaunching the app.
+        // Fire-and-forget: let simctl handle cleanup in the background.
+        if let udid = appState?.simulatorManager.bootedDeviceId {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+            process.arguments = ["simctl", "shutdown", udid]
+            try? process.run()
+            // Do NOT call waitUntilExit() — let the app terminate immediately
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -134,6 +153,7 @@ struct BlitzApp: App {
             ContentView(appState: appState)
                 .frame(minWidth: 800, minHeight: 600)
         }
+        .defaultSize(width: 1200, height: 900)
         .windowToolbarStyle(.unified(showsTitle: false))
     }
 }

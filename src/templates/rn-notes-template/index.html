@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en" style="height: 100%">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Blitz React Native App</title>
+    <style>
+      @font-face {
+        font-family: 'MaterialCommunityIcons';
+        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf') format('truetype');
+      }
+      html, body, #root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-color: #101417;
+      }
+      #root > div {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+(function() {
+  if (window.__superappLoggerInjected) return;
+  window.__superappLoggerInjected = true;
+
+  // Polyfill global for React Native Web
+  if (typeof global === 'undefined') {
+    window.global = window;
+  }
+
+  var originalConsole = { log: console.log, info: console.info, warn: console.warn, error: console.error, debug: console.debug };
+
+  var send = function(type, level, args, stack) {
+    window.parent.postMessage({
+      type: type,
+      payload: {
+        id: crypto.randomUUID(),
+        level: level,
+        message: args.map(function(a) {
+          try {
+            return typeof a === 'object' ? JSON.stringify(a) : String(a);
+          } catch(e) {
+            return String(a);
+          }
+        }).join(' '),
+        timestamp: Date.now(),
+        source: 'console',
+        stack: stack || undefined,
+      }
+    }, '*');
+  };
+
+  ['log', 'info', 'warn', 'error', 'debug'].forEach(function(level) {
+    console[level] = function() {
+      var args = Array.prototype.slice.call(arguments);
+      originalConsole[level].apply(console, args);
+      var stack = level === 'error' ? new Error().stack : undefined;
+      send('log', level, args, stack);
+    };
+  });
+
+  window.addEventListener('error', function(e) {
+    send('error', 'error', [e.message], e.error && e.error.stack);
+  });
+
+  window.addEventListener('unhandledrejection', function(e) {
+    send('error', 'error', ['Unhandled Promise rejection:', e.reason]);
+  });
+
+  var originalXHROpen = XMLHttpRequest.prototype.open;
+  var originalXHRSend = XMLHttpRequest.prototype.send;
+
+  XMLHttpRequest.prototype.open = function(method, url) {
+    this._logData = { method: method, url: String(url), startTime: Date.now() };
+    return originalXHROpen.apply(this, arguments);
+  };
+
+  XMLHttpRequest.prototype.send = function(body) {
+    var self = this;
+    this.addEventListener('loadend', function() {
+      if (!self._logData) return;
+      window.parent.postMessage({
+        type: 'network',
+        payload: {
+          id: crypto.randomUUID(),
+          level: self.status >= 400 ? 'error' : 'info',
+          message: self._logData.method + ' ' + self._logData.url + ' ' + self.status,
+          source: 'network',
+          url: self._logData.url,
+          method: self._logData.method,
+          status: self.status,
+          duration: Date.now() - self._logData.startTime,
+          timestamp: Date.now(),
+        }
+      }, '*');
+    });
+    return originalXHRSend.apply(this, arguments);
+  };
+
+  var originalFetch = window.fetch;
+  window.fetch = function(input, init) {
+    var url = typeof input === 'string' ? input : input.url;
+    var method = (init && init.method) || 'GET';
+    var startTime = Date.now();
+
+    return originalFetch.apply(this, arguments).then(function(response) {
+      window.parent.postMessage({
+        type: 'network',
+        payload: {
+          id: crypto.randomUUID(),
+          level: response.status >= 400 ? 'error' : 'info',
+          message: method + ' ' + url + ' ' + response.status,
+          source: 'network',
+          url: url,
+          method: method,
+          status: response.status,
+          duration: Date.now() - startTime,
+          timestamp: Date.now(),
+        }
+      }, '*');
+      return response;
+    }, function(error) {
+      window.parent.postMessage({
+        type: 'network',
+        payload: {
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: method + ' ' + url + ' FAILED',
+          source: 'network',
+          url: url,
+          method: method,
+          duration: Date.now() - startTime,
+          timestamp: Date.now(),
+        }
+      }, '*');
+      throw error;
+    });
+  };
+
+  // getUserMedia polyfill for microphone support
+  if (!navigator.mediaDevices) {
+    navigator.mediaDevices = {};
+  }
+
+  var originalGetUserMedia = navigator.mediaDevices.getUserMedia
+    ? navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+    : null;
+  var activeStreams = new Map();
+  var requestCounter = 0;
+
+  navigator.mediaDevices.getUserMedia = function(constraints) {
+    if (!(constraints && constraints.audio) && originalGetUserMedia) {
+      return originalGetUserMedia(constraints);
+    }
+
+    console.log('[Superapp] getUserMedia called with constraints:', constraints);
+
+    return new Promise(function(resolve, reject) {
+      var requestId = 'mic-req-' + (requestCounter++);
+
+      var audioContext = new AudioContext({ sampleRate: 48000 });
+      var bufferSize = 4096;
+      var scriptProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+      var destination = audioContext.createMediaStreamDestination();
+      scriptProcessor.connect(destination);
+
+      var audioBuffer = new Float32Array(bufferSize * 4);
+      var bufferIndex = 0;
+
+      scriptProcessor.onaudioprocess = function(e) {
+        var outputData = e.outputBuffer.getChannelData(0);
+        for (var i = 0; i < outputData.length; i++) {
+          if (bufferIndex > 0) {
+            outputData[i] = audioBuffer[i];
+          } else {
+            outputData[i] = 0;
+          }
+        }
+        if (bufferIndex >= outputData.length) {
+          var remaining = bufferIndex - outputData.length;
+          for (var j = 0; j < remaining; j++) {
+            audioBuffer[j] = audioBuffer[j + outputData.length];
+          }
+          bufferIndex = remaining;
+        } else {
+          bufferIndex = 0;
+        }
+      };
+
+      var messageHandler = function(event) {
+        if (event.source !== window.parent) return;
+
+        if (event.data.type === 'microphone-granted' && event.data.requestId === requestId) {
+          console.log('[Superapp] Microphone granted');
+          activeStreams.set(requestId, { audioContext: audioContext, scriptProcessor: scriptProcessor, destination: destination });
+          resolve(destination.stream);
+        } else if (event.data.type === 'microphone-denied' && event.data.requestId === requestId) {
+          console.error('[Superapp] Microphone denied:', event.data.error);
+          audioContext.close();
+          reject(new Error(event.data.error || 'Microphone access denied'));
+        } else if (event.data.type === 'audio-data') {
+          var samples = new Float32Array(event.data.samples);
+          for (var k = 0; k < samples.length; k++) {
+            if (bufferIndex < audioBuffer.length) {
+              audioBuffer[bufferIndex++] = samples[k];
+            }
+          }
+        }
+      };
+
+      window.addEventListener('message', messageHandler);
+
+      window.parent.postMessage({
+        type: 'request-microphone',
+        payload: { requestId: requestId }
+      }, '*');
+
+      setTimeout(function() {
+        if (!activeStreams.has(requestId)) {
+          window.removeEventListener('message', messageHandler);
+          audioContext.close();
+          reject(new Error('Microphone request timeout'));
+        }
+      }, 10000);
+    });
+  };
+
+  if (!navigator.mediaDevices.enumerateDevices) {
+    navigator.mediaDevices.enumerateDevices = function() {
+      return Promise.resolve([
+        {
+          deviceId: 'default',
+          kind: 'audioinput',
+          label: 'Default Microphone',
+          groupId: 'default'
+        }
+      ]);
+    };
+  }
+
+  window.parent.postMessage({ type: 'ready', payload: {} }, '*');
+})();
+    </script>
+    <script type="module" src="src/main.tsx"></script>
+  </body>
+</html>

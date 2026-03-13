@@ -5,7 +5,7 @@ struct NewProjectSheet: View {
     @Binding var isPresented: Bool
 
     @State private var projectName = ""
-    @State private var projectType: ProjectType = .blitz
+    @State private var projectType: ProjectType = .reactNative
     @State private var errorMessage: String?
 
     var body: some View {
@@ -17,7 +17,6 @@ struct NewProjectSheet: View {
                 TextField("Project Name", text: $projectName)
 
                 Picker("Type", selection: $projectType) {
-                    Text("Blitz").tag(ProjectType.blitz)
                     Text("React Native").tag(ProjectType.reactNative)
                     Text("Swift").tag(ProjectType.swift)
                 }
@@ -77,8 +76,12 @@ struct NewProjectSheet: View {
         // Flag that this project needs setup — ContentView will trigger it
         appState.projectSetup.pendingSetupProjectId = projectId
 
-        // Select the new project and dismiss immediately
+        // Clear the sheet flag before switching projects — showNewProjectSheet is on
+        // shared appState, so if it stays true the main window's .sheet binding fires too.
+        appState.showNewProjectSheet = false
+
+        // Select the new project — WelcomeWindow's onChange will open main window
+        // and close the welcome window.
         appState.activeProjectId = projectId
-        isPresented = false
     }
 }

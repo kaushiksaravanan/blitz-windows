@@ -3,12 +3,26 @@
 # Reads JSON-RPC from stdin, POSTs to Blitz's MCP server, writes response to stdout
 PORT_FILE="$HOME/.blitz/mcp-port"
 
+# Wait up to 10 seconds for Blitz to start and write the port file
+WAITED=0
+while [ ! -f "$PORT_FILE" ] && [ "$WAITED" -lt 10 ]; do
+    sleep 1
+    WAITED=$((WAITED + 1))
+done
+
 if [ ! -f "$PORT_FILE" ]; then
     echo '{"jsonrpc":"2.0","id":1,"error":{"code":-1,"message":"Blitz is not running. Please start Blitz first."}}' >&2
     exit 1
 fi
 
 PORT=$(cat "$PORT_FILE")
+
+# Wait up to 5 more seconds for the HTTP server to accept connections
+WAITED=0
+while ! curl -s -o /dev/null -w '' "http://127.0.0.1:${PORT}/mcp" 2>/dev/null && [ "$WAITED" -lt 5 ]; do
+    sleep 1
+    WAITED=$((WAITED + 1))
+done
 
 while IFS= read -r line; do
     [ -z "$line" ] && continue

@@ -46,7 +46,6 @@ struct ContentView: View {
             DetailView(appState: appState)
         }
         .navigationSplitViewStyle(.balanced)
-        .preferredColorScheme(.dark)
         .background(HostingWindowFinder { window in
             mainWindow = window
         })

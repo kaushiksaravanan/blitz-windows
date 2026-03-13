@@ -1,0 +1,17 @@
+{
+  "allowlist": [
+    "."
+  ],
+  "ignore": [
+    "**/.blitz/**",
+    "**/.git/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.next/**",
+    "**/.turbo/**",
+    "**/coverage/**",
+    "**/*.log",
+    "**/.DS_Store"
+  ]
+}

@@ -119,6 +119,7 @@ var settingsStore = SettingsService.shared
     var databaseManager = DatabaseManager()
     var projectSetup = ProjectSetupManager()
     var ascManager = ASCManager()
+    var autoUpdate = AutoUpdateManager()
 
     // Sheet control (toggled by menu bar, observed by ContentView)
     var showNewProjectSheet = false
@@ -345,7 +346,7 @@ final class ProjectSetupManager {
     var pendingSetupProjectId: String?
 
     /// Scaffold a project using the appropriate template for its type.
-    func setup(projectId: String, projectName: String, projectPath: String, projectType: ProjectType = .blitz) async {
+    func setup(projectId: String, projectName: String, projectPath: String, projectType: ProjectType = .reactNative) async {
         isSettingUp = true
         setupProjectId = projectId
         currentStep = nil
@@ -360,7 +361,7 @@ final class ProjectSetupManager {
                     projectPath: projectPath,
                     onStep: { step in self.currentStep = step }
                 )
-            case .blitz, .reactNative:
+            case .reactNative:
                 try await ProjectSetupService.setup(
                     projectId: projectId,
                     projectName: projectName,

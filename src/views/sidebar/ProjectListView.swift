@@ -32,7 +32,6 @@ struct ProjectListView: View {
 
     private func projectIcon(_ type: ProjectType) -> String {
         switch type {
-        case .blitz: return "bolt.fill"
         case .reactNative: return "atom"
         case .swift: return "swift"
         case .flutter: return "bird"
