@@ -4,10 +4,16 @@ struct DeviceSelectorView: View {
     @Bindable var appState: AppState
     @State private var isBooting = false
 
+    private var supportedSimulators: [SimulatorInfo] {
+        appState.simulatorManager.simulators.filter {
+            SimulatorConfigDatabase.isSupported($0.name)
+        }
+    }
+
     var body: some View {
         Menu {
             Section("Simulators") {
-                ForEach(appState.simulatorManager.simulators) { sim in
+                ForEach(supportedSimulators) { sim in
                     Button(action: {
                         Task { await selectSimulator(sim) }
                     }) {
@@ -20,8 +26,8 @@ struct DeviceSelectorView: View {
                     }
                 }
 
-                if appState.simulatorManager.simulators.isEmpty {
-                    Text("No simulators found")
+                if supportedSimulators.isEmpty {
+                    Text("No supported simulators found")
                         .foregroundStyle(.secondary)
                 }
             }

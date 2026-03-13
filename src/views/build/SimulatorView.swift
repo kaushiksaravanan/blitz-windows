@@ -17,9 +17,13 @@ struct SimulatorView: View {
         return SimulatorConfigDatabase.config(for: name)
     }
 
-    /// Compute the crop rect from device config + current frame size
+    /// Current frame dimensions from the capture (pixels)
+    private var frameSize: CGSize { stream.captureService.frameSize }
+
+    /// Compute the crop rect from device config + current frame size.
+    /// Only crops the toolbar — bezels remain visible (matches blitz-cn).
     private var cropRect: (x: Double, y: Double, w: Double, h: Double) {
-        let size = stream.captureService.frameSize
+        let size = frameSize
         guard size.width > 0, size.height > 0 else {
             return (0, 0, 1, 1)
         }
@@ -30,10 +34,19 @@ struct SimulatorView: View {
         )
     }
 
-    /// Aspect ratio of the cropped iPhone screen
-    private var screenAspectRatio: CGFloat {
-        let config = deviceConfig
-        return config.widthPoints / config.heightPoints
+    /// Aspect ratio of the crop region (full width × height-minus-toolbar).
+    private var cropAspectRatio: CGFloat {
+        let size = frameSize
+        guard size.width > 0, size.height > 0 else {
+            return deviceConfig.widthPoints / deviceConfig.heightPoints
+        }
+        let crop = cropRect
+        let cropW = crop.w * size.width
+        let cropH = crop.h * size.height
+        guard cropH > 0 else {
+            return deviceConfig.widthPoints / deviceConfig.heightPoints
+        }
+        return cropW / cropH
     }
 
     var body: some View {
@@ -48,11 +61,13 @@ struct SimulatorView: View {
                         cursor: nil,
                         cropRect: cropRect
                     )
-                    .aspectRatio(screenAspectRatio, contentMode: .fit)
+                    .aspectRatio(cropAspectRatio, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 32))
                     .overlay(
                         TouchOverlayView(
                             deviceConfig: deviceConfig,
+                            frameWidth: Int(frameSize.width),
+                            frameHeight: Int(frameSize.height),
                             onTap: { x, y in
                                 Task { try? await handleTap(x: x, y: y) }
                             },
@@ -145,12 +160,7 @@ struct SimulatorView: View {
             }
 
             ToolbarItem(placement: .primaryAction) {
-                if stream.isCapturing {
-                    Text("\(stream.fps) FPS")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-                }
+                FPSCounterView(stream: stream)
             }
 
             ToolbarItem(placement: .primaryAction) {
@@ -259,6 +269,21 @@ struct SimulatorView: View {
         if let monitor = keyMonitor {
             NSEvent.removeMonitor(monitor)
             keyMonitor = nil
+        }
+    }
+}
+
+/// Isolates FPS observation so that frequent fps updates don't re-evaluate
+/// SimulatorView.body, which would reconstruct the toolbar and dismiss popovers.
+private struct FPSCounterView: View {
+    let stream: SimulatorStreamManager
+
+    var body: some View {
+        if stream.isCapturing {
+            Text("\(stream.fps) FPS")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
         }
     }
 }

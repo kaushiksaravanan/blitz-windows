@@ -3,6 +3,8 @@ import SwiftUI
 /// Transparent overlay that captures touch/click events and translates to device actions
 struct TouchOverlayView: View {
     let deviceConfig: SimulatorDeviceConfig
+    let frameWidth: Int
+    let frameHeight: Int
     let onTap: (Double, Double) -> Void
     /// (fromX, fromY, toX, toY, duration, delta)
     let onSwipe: (Double, Double, Double, Double, Double, Int) -> Void
@@ -43,7 +45,9 @@ struct TouchOverlayView: View {
                                     viewY: Double(end.y),
                                     viewWidth: Double(geometry.size.width),
                                     viewHeight: Double(geometry.size.height),
-                                    config: deviceConfig
+                                    config: deviceConfig,
+                                    frameWidth: frameWidth,
+                                    frameHeight: frameHeight
                                 )
                                 onTap(simX, simY)
 
@@ -64,14 +68,18 @@ struct TouchOverlayView: View {
                                     viewY: Double(start.y),
                                     viewWidth: Double(geometry.size.width),
                                     viewHeight: Double(geometry.size.height),
-                                    config: deviceConfig
+                                    config: deviceConfig,
+                                    frameWidth: frameWidth,
+                                    frameHeight: frameHeight
                                 )
                                 let (endX, endY) = SimulatorConfigDatabase.viewToSimulatorCoords(
                                     viewX: Double(end.x),
                                     viewY: Double(end.y),
                                     viewWidth: Double(geometry.size.width),
                                     viewHeight: Double(geometry.size.height),
-                                    config: deviceConfig
+                                    config: deviceConfig,
+                                    frameWidth: frameWidth,
+                                    frameHeight: frameHeight
                                 )
 
                                 // Duration = actual drag hold time in seconds
