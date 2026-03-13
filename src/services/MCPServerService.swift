@@ -197,10 +197,14 @@ actor MCPServerService {
     /// Handle MCP JSON-RPC request
     private func handleMCPRequest(_ body: Data) async throws -> String {
         guard let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
-              let methodName = json["method"] as? String,
-              let id = json["id"] else {
+              let methodName = json["method"] as? String else {
             throw MCPError.invalidRequest
         }
+
+        // Notifications (method starts with "notifications/") have no id and
+        // expect no response per JSON-RPC 2.0.  Accept them gracefully.
+        let id: Any = json["id"] ?? NSNull()
+        let isNotification = methodName.hasPrefix("notifications/")
 
         let params = json["params"] as? [String: Any] ?? [:]
 
@@ -219,7 +223,7 @@ actor MCPServerService {
             ] as [String: Any]
 
         case "notifications/initialized":
-            // Client acknowledgment — no response needed but we return empty result
+            // Client acknowledgment — return empty result
             result = [:] as [String: Any]
 
         case "tools/list":
@@ -233,7 +237,12 @@ actor MCPServerService {
             result = try await toolExecutor.execute(name: toolName, arguments: toolArgs)
 
         default:
-            throw MCPError.unknownMethod(methodName)
+            if isNotification {
+                // Unknown notification — accept silently
+                result = [:] as [String: Any]
+            } else {
+                throw MCPError.unknownMethod(methodName)
+            }
         }
 
         let response: [String: Any] = [

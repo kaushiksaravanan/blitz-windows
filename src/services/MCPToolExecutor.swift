@@ -130,10 +130,11 @@ actor MCPToolExecutor {
     // MARK: - Approval Flow
 
     private func requestApproval(_ request: ApprovalRequest) async -> Bool {
-        // Show alert on main thread
+        // Show alert on main thread and bring Blitz to front so user sees it
         await MainActor.run {
             appState.pendingApproval = request
             appState.showApprovalAlert = true
+            NSApp.activate(ignoringOtherApps: true)
         }
 
         // Suspend until user approves/denies or timeout

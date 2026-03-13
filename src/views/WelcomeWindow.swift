@@ -6,9 +6,15 @@ struct WelcomeWindow: View {
     @State private var welcomeWindow: NSWindow?
 
     var body: some View {
-        HStack(spacing: 0) {
-            leftPanel
-            rightPanel
+        ZStack {
+            HStack(spacing: 0) {
+                leftPanel
+                rightPanel
+            }
+
+            if appState.autoUpdate.showsFullScreenOverlay {
+                UpdateOverlay(autoUpdate: appState.autoUpdate)
+            }
         }
         .background(.ultraThickMaterial)
         .background(WindowFinder { window in
@@ -85,8 +91,6 @@ struct WelcomeWindow: View {
                     action: { appState.showImportProjectSheet = true }
                 )
             }
-
-            UpdateBanner(autoUpdate: appState.autoUpdate)
 
             Spacer()
         }

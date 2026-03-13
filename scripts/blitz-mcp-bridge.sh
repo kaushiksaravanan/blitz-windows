@@ -26,7 +26,21 @@ done
 
 while IFS= read -r line; do
     [ -z "$line" ] && continue
-    response=$(curl -s -X POST "http://127.0.0.1:${PORT}/mcp" \
+
+    # Notifications (no "id" field) don't expect a response in MCP protocol.
+    # Still forward to server but discard the HTTP response to avoid
+    # injecting unexpected lines into the stdout stream.
+    case "$line" in
+        *'"id"'*) ;; # has id — normal request, will echo response below
+        *)
+            curl -s -o /dev/null -X POST "http://127.0.0.1:${PORT}/mcp" \
+                -H "Content-Type: application/json" \
+                --max-time 5 -d "$line" 2>/dev/null
+            continue
+            ;;
+    esac
+
+    response=$(curl -s --max-time 120 -X POST "http://127.0.0.1:${PORT}/mcp" \
         -H "Content-Type: application/json" \
         -d "$line" 2>/dev/null)
     if [ $? -ne 0 ]; then

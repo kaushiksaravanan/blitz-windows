@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.9
+- Fix MCP bridge dropping responses when Claude Code sends notifications (root cause of asc_fill_form hanging)
+- Fix App Store build for Xcode 26 (manual distribution signing, export method "app-store")
+- Add early guard when provisioning profile is missing from app_store_build
+- Fix MCP server rejecting notification messages that have no JSON-RPC id
+- Add --max-time to bridge script curl to prevent silent hangs
+- Add RN project template, remove warm-template logic
+- Fix screenshot counts showing 0 in submission readiness
+- Fix sidebar push caused by HSplitView in detail views
+
+## 1.0.8
+- Test Auto Update UI fix
+## 1.0.7
+- Auto Update UI fix 
+
+## 1.0.6 
+- Test Auto-Update Logic 
+
 ## 1.0.5
 - Bug fixes
 

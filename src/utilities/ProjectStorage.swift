@@ -20,8 +20,10 @@ struct ProjectStorage {
         decoder.dateDecodingStrategy = .iso8601
 
         for entry in entries {
-            let isDir = (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-            guard isDir else { continue }
+            // fileExists(atPath:isDirectory:) follows symlinks;
+            // isDirectoryKey does NOT, so symlinked project dirs would be skipped.
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: entry.path, isDirectory: &isDir), isDir.boolValue else { continue }
 
             let metadataFile = entry.appendingPathComponent(".blitz/project.json")
             guard let data = try? Data(contentsOf: metadataFile),
@@ -51,10 +53,15 @@ struct ProjectStorage {
         return try? decoder.decode(BlitzProjectMetadata.self, from: data)
     }
 
-    /// Write project metadata
+    /// Write project metadata into ~/.blitz/projects/{id}/.blitz/project.json
     func writeMetadata(projectId: String, metadata: BlitzProjectMetadata) throws {
         let projectDir = baseDirectory.appendingPathComponent(projectId)
-        let blitzDir = projectDir.appendingPathComponent(".blitz")
+        try writeMetadataToDirectory(projectDir, metadata: metadata)
+    }
+
+    /// Write project metadata into an arbitrary directory (e.g. the original project path before symlinking).
+    func writeMetadataToDirectory(_ dir: URL, metadata: BlitzProjectMetadata) throws {
+        let blitzDir = dir.appendingPathComponent(".blitz")
         try FileManager.default.createDirectory(at: blitzDir, withIntermediateDirectories: true)
 
         let encoder = JSONEncoder()
@@ -177,39 +184,60 @@ struct ProjectStorage {
         }
     }
 
-    /// Ensure CLAUDE.md and .claude/settings.local.json exist for a project.
-    /// Mirrors the server-side ensureClaudeFiles() logic.
+    /// Ensure CLAUDE.md, .claude/settings.local.json, and .claude/rules/ exist for a project.
     func ensureClaudeFiles(projectId: String, projectType: ProjectType) {
         let fm = FileManager.default
         let projectDir = baseDirectory.appendingPathComponent(projectId)
+        let claudeDir = projectDir.appendingPathComponent(".claude")
 
         // 1. .claude/settings.local.json
-        let claudeDir = projectDir.appendingPathComponent(".claude")
+        // Always update enabledMcpjsonServers (Blitz-owned structural setting).
         let settingsFile = claudeDir.appendingPathComponent("settings.local.json")
-        if !fm.fileExists(atPath: settingsFile.path) {
-            try? fm.createDirectory(at: claudeDir, withIntermediateDirectories: true)
-            let settings: [String: Any] = [
+        try? fm.createDirectory(at: claudeDir, withIntermediateDirectories: true)
+        let correctServers = ["blitz-macos", "blitz-iphone"]
+        var settings: [String: Any]
+        if fm.fileExists(atPath: settingsFile.path),
+           let data = try? Data(contentsOf: settingsFile),
+           var existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            // Preserve user customisations; only force-update the server list
+            existing["enabledMcpjsonServers"] = correctServers
+            settings = existing
+        } else {
+            settings = [
                 "permissions": [
                     "allow": [
                         "Bash(curl:*)",
                         "Bash(xcrun simctl terminate:*)",
                         "Bash(xcrun simctl launch:*)",
-                        "mcp__blitz-macos__get_project_state",
+                        "mcp__blitz-macos__app_get_state",
                     ]
                 ],
-                "enabledMcpjsonServers": ["blitz-macos", "blitz-iphone"],
+                "enabledMcpjsonServers": correctServers,
             ]
-            if let data = try? JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys]) {
-                try? data.write(to: settingsFile)
-            }
+        }
+        if let data = try? JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: settingsFile)
         }
 
-        // 2. CLAUDE.md — load from bundled template
+        // 2. CLAUDE.md — write only if absent; user may have their own
         let claudeMdFile = projectDir.appendingPathComponent("CLAUDE.md")
         if !fm.fileExists(atPath: claudeMdFile.path) {
             let content = Self.claudeMdContent(projectType: projectType)
             try? content.write(to: claudeMdFile, atomically: true, encoding: .utf8)
         }
+
+        // 3. .claude/rules/ — Blitz-owned files, always overwrite.
+        // These auto-load in every Claude Code session alongside any existing CLAUDE.md,
+        // so agents get Blitz/Teenybase context even on projects with pre-existing docs.
+        let rulesDir = claudeDir.appendingPathComponent("rules")
+        try? fm.createDirectory(at: rulesDir, withIntermediateDirectories: true)
+
+        let blitzRules = rulesDir.appendingPathComponent("blitz.md")
+        try? Self.blitzRulesContent().write(to: blitzRules, atomically: true, encoding: .utf8)
+
+        let teenybaseRules = rulesDir.appendingPathComponent("teenybase.md")
+        try? Self.teenybaseRulesContent(projectDir: projectDir, projectType: projectType)
+            .write(to: teenybaseRules, atomically: true, encoding: .utf8)
     }
 
     private static func claudeMdContent(projectType: ProjectType) -> String {
@@ -218,12 +246,180 @@ struct ProjectStorage {
             return "# Blitz AI Agent Guide\n"
         }
 
-        let header = projectType == .swift
-            ? "Swift Project — Blitz AI Agent Guide"
-            : "React Native Project — Blitz AI Agent Guide"
+        let header: String
+        switch projectType {
+        case .swift:
+            header = "Swift Project — Blitz AI Agent Guide"
+        case .reactNative:
+            header = "React Native Project — Blitz AI Agent Guide"
+        case .flutter:
+            header = "Flutter Project — Blitz AI Agent Guide"
+        }
         template = template.replacingOccurrences(of: "{{PROJECT_TYPE_HEADER}}", with: header)
 
         return template
+    }
+
+    private static func blitzRulesContent() -> String {
+        guard let url = Bundle.appResources.url(forResource: "blitz-rules", withExtension: "md"),
+              let content = try? String(contentsOf: url, encoding: .utf8) else {
+            return "# Blitz MCP Integration\n"
+        }
+        return content
+    }
+
+    private static func teenybaseRulesContent(projectDir: URL, projectType: ProjectType) -> String {
+        let fm = FileManager.default
+
+        let backendDir: URL
+        let schemaPath: String
+        let commandPrefix: String
+        switch projectType {
+        case .reactNative:
+            backendDir = projectDir
+            schemaPath = "teenybase.ts"
+            commandPrefix = ""
+        case .swift, .flutter:
+            backendDir = projectDir.appendingPathComponent("backend")
+            schemaPath = "backend/teenybase.ts"
+            commandPrefix = "cd backend && "
+        }
+
+        let hasBackend = fm.fileExists(atPath: backendDir.appendingPathComponent("teenybase.ts").path)
+        let templateName = hasBackend ? "teenybase-rules-backend" : "teenybase-rules-no-backend"
+
+        guard let url = Bundle.appResources.url(forResource: templateName, withExtension: "md"),
+              var content = try? String(contentsOf: url, encoding: .utf8) else {
+            return "# Teenybase Backend\n"
+        }
+
+        content = content.replacingOccurrences(of: "{{DEVVARS_PATH}}", with: backendDir.appendingPathComponent(".dev.vars").path)
+        content = content.replacingOccurrences(of: "{{SCHEMA_PATH}}", with: schemaPath)
+        content = content.replacingOccurrences(of: "{{COMMAND_PREFIX}}", with: commandPrefix)
+        return content
+    }
+
+    // MARK: - Teenybase backend scaffolding
+
+    /// Copy Teenybase backend files into a project if not already present.
+    /// RN projects get files at the project root; Swift/Flutter get a backend/ subdirectory.
+    func ensureTeenybaseBackend(projectId: String, projectType: ProjectType) {
+        let fm = FileManager.default
+        let projectDir = baseDirectory.appendingPathComponent(projectId)
+
+        guard let templateURL = Bundle.appResources.url(
+            forResource: "rn-notes-template", withExtension: nil, subdirectory: "templates"
+        ) else {
+            print("[ProjectStorage] Teenybase template not found in bundle")
+            return
+        }
+
+        switch projectType {
+        case .reactNative:
+            copyTeenybaseFiles(from: templateURL, to: projectDir, fm: fm)
+            mergeTeenybaseScripts(into: projectDir.appendingPathComponent("package.json"), fm: fm)
+        case .swift, .flutter:
+            let backendDir = projectDir.appendingPathComponent("backend")
+            try? fm.createDirectory(at: backendDir, withIntermediateDirectories: true)
+            copyTeenybaseFiles(from: templateURL, to: backendDir, fm: fm)
+            ensureStandalonePackageJson(at: backendDir.appendingPathComponent("package.json"),
+                                        projectId: projectId, fm: fm)
+        }
+    }
+
+    /// Copy teenybase.ts, wrangler.toml, src-backend/worker.ts, and .dev.vars into dest.
+    /// Skips each file if it already exists so existing configs are never overwritten.
+    private func copyTeenybaseFiles(from templateURL: URL, to dest: URL, fm: FileManager) {
+        // teenybase.ts — skip if present (indicates backend already set up)
+        let teenybaseDest = dest.appendingPathComponent("teenybase.ts")
+        guard !fm.fileExists(atPath: teenybaseDest.path) else { return }
+
+        try? fm.copyItem(at: templateURL.appendingPathComponent("teenybase.ts"), to: teenybaseDest)
+
+        // wrangler.toml
+        let wranglerDest = dest.appendingPathComponent("wrangler.toml")
+        if !fm.fileExists(atPath: wranglerDest.path) {
+            let src = templateURL.appendingPathComponent("wrangler.toml")
+            if var content = try? String(contentsOf: src, encoding: .utf8) {
+                content = content.replacingOccurrences(of: "sample-app", with: dest.deletingLastPathComponent().lastPathComponent)
+                try? content.write(to: wranglerDest, atomically: true, encoding: .utf8)
+            }
+        }
+
+        // src-backend/worker.ts
+        let srcBackendDest = dest.appendingPathComponent("src-backend")
+        try? fm.createDirectory(at: srcBackendDest, withIntermediateDirectories: true)
+        let workerDest = srcBackendDest.appendingPathComponent("worker.ts")
+        if !fm.fileExists(atPath: workerDest.path) {
+            try? fm.copyItem(
+                at: templateURL.appendingPathComponent("src-backend/worker.ts"),
+                to: workerDest
+            )
+        }
+
+        // .dev.vars — from sample.vars
+        let devVarsDest = dest.appendingPathComponent(".dev.vars")
+        if !fm.fileExists(atPath: devVarsDest.path) {
+            let sampleVars = templateURL.appendingPathComponent("sample.vars")
+            if fm.fileExists(atPath: sampleVars.path) {
+                try? fm.copyItem(at: sampleVars, to: devVarsDest)
+            }
+        }
+    }
+
+    /// For RN projects: merge teenybase scripts + devDependency into existing package.json.
+    /// No-op if teenybase is already in devDependencies.
+    private func mergeTeenybaseScripts(into packageJsonURL: URL, fm: FileManager) {
+        guard fm.fileExists(atPath: packageJsonURL.path),
+              let data = try? Data(contentsOf: packageJsonURL),
+              var pkg = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+
+        var devDeps = pkg["devDependencies"] as? [String: Any] ?? [:]
+        guard devDeps["teenybase"] == nil else { return } // already set up
+
+        devDeps["teenybase"] = "0.0.10"
+        pkg["devDependencies"] = devDeps
+
+        var scripts = pkg["scripts"] as? [String: Any] ?? [:]
+        let backendScripts: [String: String] = [
+            "generate:backend": "teeny generate --local",
+            "migrate:backend": "teeny migrate --local",
+            "dev:backend": "teeny dev --local",
+            "build:backend": "teeny build --local",
+            "exec:backend": "teeny exec --local",
+            "deploy:backend:remote": "teeny deploy --migrate --remote",
+        ]
+        for (key, value) in backendScripts where scripts[key] == nil {
+            scripts[key] = value
+        }
+        pkg["scripts"] = scripts
+
+        if let updated = try? JSONSerialization.data(withJSONObject: pkg, options: [.prettyPrinted, .sortedKeys]) {
+            try? updated.write(to: packageJsonURL)
+        }
+    }
+
+    /// For Swift/Flutter: write a standalone package.json for the backend/ subdirectory.
+    private func ensureStandalonePackageJson(at url: URL, projectId: String, fm: FileManager) {
+        guard !fm.fileExists(atPath: url.path) else { return }
+        let content = """
+        {
+          "name": "\(projectId)-backend",
+          "version": "1.0.0",
+          "scripts": {
+            "generate": "teeny generate --local",
+            "migrate": "teeny migrate --local",
+            "dev": "teeny dev --local",
+            "build": "teeny build --local",
+            "exec": "teeny exec --local",
+            "deploy": "teeny deploy --migrate --remote"
+          },
+          "devDependencies": {
+            "teenybase": "0.0.10"
+          }
+        }
+        """
+        try? content.write(to: url, atomically: true, encoding: .utf8)
     }
 
     /// Clear lastOpenedAt on all projects
@@ -234,8 +430,8 @@ struct ProjectStorage {
         decoder.dateDecodingStrategy = .iso8601
 
         for entry in entries {
-            let isDir = (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-            guard isDir else { continue }
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: entry.path, isDirectory: &isDir), isDir.boolValue else { continue }
             let projectId = entry.lastPathComponent
             guard var metadata = readMetadata(projectId: projectId) else { continue }
             metadata.lastOpenedAt = nil

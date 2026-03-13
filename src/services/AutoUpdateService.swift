@@ -23,6 +23,14 @@ final class AutoUpdateManager {
         return false
     }
 
+    /// True when the update UI should cover the entire welcome window.
+    var showsFullScreenOverlay: Bool {
+        switch state {
+        case .idle, .checking: return false
+        default: return true
+        }
+    }
+
     private var latestVersion: String?
     private var downloadURL: String?
     private var downloadFilename: String?

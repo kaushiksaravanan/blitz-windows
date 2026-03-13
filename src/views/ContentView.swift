@@ -23,6 +23,7 @@ struct ContentView: View {
     @Environment(\.openWindow) private var openWindow
     @State private var mainWindow: NSWindow?
     @State private var tabSwitchTask: Task<Void, Never>?
+    @State private var showConnectAI = false
 
     /// Consume pendingSetupProjectId and run project scaffolding if needed.
     private func startPendingSetupIfNeeded() async {
@@ -46,6 +47,17 @@ struct ContentView: View {
             DetailView(appState: appState)
         }
         .navigationSplitViewStyle(.balanced)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button(action: { showConnectAI.toggle() }) {
+                    Label("Connect AI", systemImage: "sparkles")
+                }
+                .help("Connect AI agent")
+                .popover(isPresented: $showConnectAI, arrowEdge: .bottom) {
+                    ConnectAIPopover(projectPath: appState.activeProject?.path)
+                }
+            }
+        }
         .background(HostingWindowFinder { window in
             mainWindow = window
         })
@@ -83,8 +95,17 @@ struct ContentView: View {
                 openWindow(id: "welcome")
                 mainWindow?.close()
             } else {
-                // Project switched → run pending setup + reload ASC credentials
+                // Project switched → ensure config files, run pending setup, reload ASC credentials
                 Task {
+                    if let newId = newValue, let project = appState.activeProject {
+                        // Ensure config files are up to date on every open.
+                        // Handles Tauri migration, first-open of imported projects,
+                        // and ensures Teenybase backend files are scaffolded.
+                        let storage = ProjectStorage()
+                        storage.ensureMCPConfig(projectId: newId)
+                        storage.ensureTeenybaseBackend(projectId: newId, projectType: project.type)
+                        storage.ensureClaudeFiles(projectId: newId, projectType: project.type)
+                    }
                     await startPendingSetupIfNeeded()
                     appState.ascManager.clearForProjectSwitch()
                     if let newId = newValue, let project = appState.activeProject {

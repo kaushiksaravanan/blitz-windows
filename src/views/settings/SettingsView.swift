@@ -9,6 +9,7 @@ struct SettingsView: View {
         (.ascFormMutation, "ASC form editing"),
         (.ascScreenshotMutation, "ASC screenshot upload"),
         (.ascSubmitMutation, "ASC submit for review"),
+        (.buildPipeline, "Build pipeline"),
         (.projectMutation, "Project mutations"),
         (.settingsMutation, "Settings mutations"),
         (.simulatorControl, "Simulator control"),

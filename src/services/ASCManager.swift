@@ -339,9 +339,11 @@ final class ASCManager {
             }
             builds = try await service.fetchBuilds(appId: appId)
 
-            // Check monetization status
-            let hasPricing = await service.fetchPricingConfigured(appId: appId)
-            monetizationStatus = hasPricing ? "Configured" : nil
+            // Check monetization status — skip if already set (avoids race with in-flight fetches overwriting optimistic updates from setPriceFree/setAppPrice)
+            if monetizationStatus == nil {
+                let hasPricing = await service.fetchPricingConfigured(appId: appId)
+                monetizationStatus = hasPricing ? "Configured" : nil
+            }
 
         case .storeListing:
             let versions = try await service.fetchAppStoreVersions(appId: appId)
@@ -397,8 +399,10 @@ final class ASCManager {
             for group in subscriptionGroups {
                 subscriptionsPerGroup[group.id] = try await service.fetchSubscriptionsInGroup(groupId: group.id)
             }
-            let hasPricing = await service.fetchPricingConfigured(appId: appId)
-            monetizationStatus = hasPricing ? "Configured" : nil
+            if monetizationStatus == nil {
+                let hasPricing = await service.fetchPricingConfigured(appId: appId)
+                monetizationStatus = hasPricing ? "Configured" : nil
+            }
 
         case .analytics:
             break  // Sales reports use a separate reports API; handled in view

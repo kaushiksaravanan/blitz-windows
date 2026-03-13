@@ -1,6 +1,148 @@
 import SwiftUI
 
-/// Compact update banner shown in WelcomeWindow and SettingsView.
+// MARK: - Full-screen overlay (WelcomeWindow)
+
+/// Full-screen update card that blocks the welcome window UI.
+struct UpdateOverlay: View {
+    @Bindable var autoUpdate: AutoUpdateManager
+
+    var body: some View {
+        ZStack {
+            // Dim background — blocks interaction with content beneath
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .ignoresSafeArea()
+
+            card
+                .frame(width: 380)
+                .padding(32)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.2), radius: 24, y: 8)
+        }
+    }
+
+    @ViewBuilder
+    private var card: some View {
+        switch autoUpdate.state {
+        case .available(let version, let notes):
+            VStack(spacing: 20) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.blue)
+
+                VStack(spacing: 6) {
+                    Text("Update Available")
+                        .font(.title2.weight(.semibold))
+                    Text("Version \(version)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                if !notes.isEmpty {
+                    Text(notes)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(6)
+                }
+
+                VStack(spacing: 8) {
+                    Button("Update Now") {
+                        Task { await autoUpdate.performUpdate() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity)
+
+                    Button("Later") {
+                        autoUpdate.dismiss()
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                }
+            }
+
+        case .downloading(let percent):
+            VStack(spacing: 20) {
+                Image(systemName: "arrow.down.circle")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.blue)
+
+                VStack(spacing: 6) {
+                    Text("Downloading Update")
+                        .font(.title2.weight(.semibold))
+                    Text("\(percent)%")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+
+                ProgressView(value: Double(percent), total: 100)
+                    .progressViewStyle(.linear)
+                    .frame(maxWidth: .infinity)
+
+                Text("Please wait...")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
+        case .installing:
+            VStack(spacing: 20) {
+                ProgressView()
+                    .controlSize(.large)
+
+                VStack(spacing: 6) {
+                    Text("Installing Update")
+                        .font(.title2.weight(.semibold))
+                    Text("Blitz will restart automatically.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("Please wait...")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
+        case .failed(let message):
+            VStack(spacing: 20) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.orange)
+
+                VStack(spacing: 6) {
+                    Text("Update Failed")
+                        .font(.title2.weight(.semibold))
+                    Text(message)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(4)
+                }
+
+                HStack(spacing: 12) {
+                    Button("Retry") {
+                        Task { await autoUpdate.performUpdate() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+
+                    Button("Dismiss") {
+                        autoUpdate.dismiss()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                }
+            }
+
+        default:
+            EmptyView()
+        }
+    }
+}
+
+// MARK: - Compact banner (SettingsView)
+
+/// Small inline update banner used in Settings.
 struct UpdateBanner: View {
     @Bindable var autoUpdate: AutoUpdateManager
 
@@ -45,7 +187,6 @@ struct UpdateBanner: View {
             .padding(12)
             .background(Color.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.blue.opacity(0.2), lineWidth: 1))
-            .padding(.top, 8)
 
         case .downloading(let percent):
             VStack(spacing: 6) {
@@ -62,7 +203,6 @@ struct UpdateBanner: View {
             }
             .padding(12)
             .background(Color.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-            .padding(.top, 8)
 
         case .installing:
             HStack(spacing: 8) {
@@ -73,7 +213,6 @@ struct UpdateBanner: View {
             }
             .padding(12)
             .background(Color.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-            .padding(.top, 8)
 
         case .failed(let message):
             VStack(alignment: .leading, spacing: 6) {
@@ -95,7 +234,6 @@ struct UpdateBanner: View {
             }
             .padding(12)
             .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-            .padding(.top, 8)
         }
     }
 }

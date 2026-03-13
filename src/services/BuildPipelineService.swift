@@ -508,21 +508,37 @@ actor BuildPipelineService {
 
         emit("Building scheme '\(resolvedScheme)' (\(config))...")
 
-        // Archive
+        // Load signing state so we can use manual distribution signing in both archive + export
+        let signingState = loadSigningState(bundleId: bundleId)
+        let profileRef = signingState.profileName ?? signingState.profileUUID ?? ""
+
+        guard !profileRef.isEmpty else {
+            throw ProcessRunner.ProcessError(
+                command: "app_store_build",
+                exitCode: -1,
+                stderr: "No provisioning profile found for \(bundleId). Run app_store_setup_signing first (it will auto-generate a distribution certificate and profile)."
+            )
+        }
+
+        // Archive — use manual distribution signing so Xcode 26 produces a
+        // distribution-type archive that can be exported for App Store.
         let archivePath = NSTemporaryDirectory() + "BlitzArchive-\(Int(Date().timeIntervalSince1970)).xcarchive"
-        let archiveArgs = [
+        var archiveArgs = [
             useWorkspace ? "-workspace" : "-project",
             buildTarget,
             "-scheme", resolvedScheme,
             "-configuration", config,
             "-destination", "generic/platform=iOS",
             "-archivePath", archivePath,
-            "-allowProvisioningUpdates",
             "archive",
-            "CODE_SIGN_STYLE=Automatic",
+            "CODE_SIGN_STYLE=Manual",
+            "CODE_SIGN_IDENTITY=Apple Distribution",
             "DEVELOPMENT_TEAM=\(teamId)",
             "PRODUCT_BUNDLE_IDENTIFIER=\(bundleId)"
         ]
+        if !profileRef.isEmpty {
+            archiveArgs.append("PROVISIONING_PROFILE_SPECIFIER=\(profileRef)")
+        }
 
         let archiveStderr = StderrCollector()
         let managed = ProcessRunner.stream(
@@ -558,13 +574,15 @@ actor BuildPipelineService {
 
         // Generate ExportOptions.plist
         let exportOptionsPath = NSTemporaryDirectory() + "ExportOptions-\(Int(Date().timeIntervalSince1970)).plist"
-        let exportOptions: [String: Any] = [
-            "method": "app-store-connect",
+        var exportOptions: [String: Any] = [
+            "method": "app-store",
             "teamID": teamId,
-            "signingStyle": "automatic",
-            "uploadBitcode": false,
+            "signingStyle": "manual",
             "uploadSymbols": true
         ]
+        if !profileRef.isEmpty {
+            exportOptions["provisioningProfiles"] = [bundleId: profileRef]
+        }
         let plistData = try PropertyListSerialization.data(
             fromPropertyList: exportOptions,
             format: .xml,
