@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.11 
+- Clear TCC bug fix
+
+## 1.0.10
+- Simulator bug fixes and pkg script fix
+
 ## 1.0.9
 - Fix MCP bridge dropping responses when Claude Code sends notifications (root cause of asc_fill_form hanging)
 - Fix App Store build for Xcode 26 (manual distribution signing, export method "app-store")

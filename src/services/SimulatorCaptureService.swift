@@ -235,7 +235,7 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
             case .simulatorWindowNotFound:
                 return "Could not find iOS Simulator window. Make sure Simulator.app is running."
             case .screenRecordingDenied(let msg):
-                return "Screen recording permission denied. Grant access in System Settings → Privacy & Security → Screen Recording. (\(msg))"
+                return "Screen recording permission denied. Grant access in System Settings → Privacy & Security → Screen Recording, then restart Blitz. If the Quit & Restart popup does not appear after enabling the screen recording permission for Blitz, reboot your Mac. (\(msg))"
             case .captureStartFailed(let msg):
                 return "Failed to start capture: \(msg)"
             }
