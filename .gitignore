@@ -50,3 +50,15 @@ yarn-error.log
 .idea/
 *.swp
 *~
+
+# Rust / Cargo
+target/
+
+# Frontend build output
+dist/
+
+# Android / Gradle
+.gradle/
+*.apk
+*.aab
+local.properties

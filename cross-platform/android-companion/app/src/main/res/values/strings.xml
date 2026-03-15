@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Blitz Companion</string>
+    <string name="connect_title">Connect to Windows Host</string>
+    <string name="host_label">Host IP Address</string>
+    <string name="port_label">Port</string>
+    <string name="api_key_label">API Key</string>
+    <string name="connect_button">Connect</string>
+    <string name="disconnect_button">Disconnect</string>
+    <string name="tab_dashboard">Dashboard</string>
+    <string name="tab_devices">Devices</string>
+    <string name="tab_emulators">Emulators</string>
+    <string name="tab_builds">Builds</string>
+    <string name="tab_logcat">Logcat</string>
+    <string name="tab_settings">Settings</string>
+    <string name="no_devices">No devices connected</string>
+    <string name="no_emulators">No emulators configured</string>
+    <string name="no_builds">No builds in progress</string>
+    <string name="build_start">Start Build</string>
+    <string name="build_cancel">Cancel</string>
+    <string name="save_settings">Save</string>
+    <string name="clear_connection">Clear</string>
+</resources>
