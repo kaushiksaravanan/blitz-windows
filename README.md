@@ -74,4 +74,4 @@ Single-target SwiftUI app built with Swift Package Manager. All source lives in 
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE) — free for personal and noncommercial use. Commercial use requires a separate license.
+[MIT](LICENSE)
