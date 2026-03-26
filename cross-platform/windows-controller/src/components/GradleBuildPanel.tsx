@@ -42,9 +42,16 @@ export function GradleBuildPanel() {
   const [extraArgs, setExtraArgs] = useState("");
   const logEndRef = useRef<HTMLDivElement>(null);
 
+  // Clamp selectedProjectIdx when projects list shrinks
+  useEffect(() => {
+    if (projects.length > 0 && selectedProjectIdx >= projects.length) {
+      setSelectedProjectIdx(projects.length - 1);
+    }
+  }, [projects.length, selectedProjectIdx]);
+
   // Determine project type of selected project
   const selectedProject = projects[selectedProjectIdx] ?? null;
-  const isFlutter = selectedProject?.project_type === "flutter";
+  const isFlutter = selectedProject?.projectType === "flutter";
   const availableTasks = isFlutter ? FLUTTER_TASKS : GRADLE_TASKS;
 
   // Reset task when project type changes
@@ -52,7 +59,7 @@ export function GradleBuildPanel() {
     if (availableTasks.length > 0) {
       setTask(availableTasks[0].value);
     }
-  }, [isFlutter, selectedProjectIdx]);
+  }, [isFlutter, selectedProjectIdx, availableTasks]);
 
   // Auto-scroll build logs
   useEffect(() => {
@@ -116,8 +123,8 @@ export function GradleBuildPanel() {
                 className="w-full px-3 py-2 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
               >
                 {projects.map((p, i) => (
-                  <option key={p.id} value={i}>
-                    {p.name} ({p.project_type}) — {p.path}
+                  <option key={p.path} value={i}>
+                    {p.name} ({p.projectType}) — {p.path}
                   </option>
                 ))}
               </select>
@@ -204,9 +211,9 @@ export function GradleBuildPanel() {
             >
               Build {activeBuild.phase}
             </span>
-            {activeBuild.output_apk && (
+            {activeBuild.outputApk && (
               <p className="text-xs text-[var(--text-secondary)] mt-1 font-mono">
-                APK: {activeBuild.output_apk}
+                APK: {activeBuild.outputApk}
               </p>
             )}
             {activeBuild.error && (
@@ -266,7 +273,7 @@ export function GradleBuildPanel() {
               <div>
                 <span className="text-xs">{build.task}</span>
                 <span className="text-[10px] text-[var(--text-secondary)] ml-2">
-                  {build.project_path.split("\\").pop() || build.project_path}
+                  {build.projectPath.split(/[\\/]/).pop() || build.projectPath}
                 </span>
               </div>
               <span

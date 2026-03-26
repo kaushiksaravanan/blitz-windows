@@ -4,7 +4,6 @@
 
 import { useEffect, useState } from "react";
 import { useBlitzStore } from "../store";
-import { open } from "@tauri-apps/plugin-dialog";
 
 export function ProjectPanel() {
   const projects = useBlitzStore((s) => s.projects);
@@ -26,10 +25,10 @@ export function ProjectPanel() {
   const handleAddProject = async () => {
     setError(null);
     try {
-      const dirPath = await open({
-        directory: true,
-        title: "Select project root directory (Android or Flutter)",
-      });
+      const dirPath = await window.electronAPI.invoke("show_open_dialog", {
+        properties: ["openDirectory"],
+        title: "Select project root directory (Android, Flutter, or React Native)",
+      }) as string | null;
 
       if (!dirPath) return; // User cancelled
 
@@ -51,7 +50,8 @@ export function ProjectPanel() {
   };
 
   const handleBuild = (projectPath: string) => {
-    // Navigate to builds tab — the project will be available in the project selector
+    // Pre-select this project in the store, then navigate to builds tab
+    setActiveProject(projectPath);
     setActiveTab("builds");
   };
 
@@ -116,10 +116,10 @@ export function ProjectPanel() {
       <div className="grid grid-cols-1 gap-3">
         {projects.map((project) => (
           <div
-            key={project.id}
-            onClick={() => setActiveProject(project.id)}
+            key={project.path}
+            onClick={() => setActiveProject(project.path)}
             className={`p-4 rounded-lg bg-[var(--bg-secondary)] border transition-colors cursor-pointer ${
-              activeProjectId === project.id
+              activeProjectId === project.path
                 ? "border-[var(--accent)]"
                 : "border-[var(--border)] hover:border-[var(--accent)]/50"
             }`}
@@ -134,15 +134,17 @@ export function ProjectPanel() {
                 </p>
                 <div className="flex items-center gap-3 mt-2">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                    project.project_type === "flutter"
+                    project.projectType === "flutter"
                       ? "bg-sky-500/15 text-sky-400"
-                      : "bg-[var(--bg-tertiary)] text-[var(--text-secondary)]"
+                      : project.projectType === "react-native"
+                        ? "bg-emerald-500/15 text-emerald-400"
+                        : "bg-[var(--bg-tertiary)] text-[var(--text-secondary)]"
                   }`}>
-                    {project.project_type === "flutter" ? "Flutter" : "Android Native"}
+                    {project.projectType === "flutter" ? "Flutter" : project.projectType === "react-native" ? "React Native" : "Android Native"}
                   </span>
-                  {project.application_id && (
+                  {project.applicationId && (
                     <span className="text-[10px] text-[var(--text-secondary)] font-mono">
-                      {project.application_id}
+                      {project.applicationId}
                     </span>
                   )}
                 </div>
@@ -161,12 +163,12 @@ export function ProjectPanel() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleRemove(project.id);
+                    handleRemove(project.path);
                   }}
-                  disabled={removing === project.id}
+                  disabled={removing === project.path}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--error)] bg-red-500/10 hover:bg-red-500/20 transition-colors disabled:opacity-50"
                 >
-                  {removing === project.id ? "..." : "Remove"}
+                  {removing === project.path ? "..." : "Remove"}
                 </button>
               </div>
             </div>

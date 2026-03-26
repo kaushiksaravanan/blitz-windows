@@ -21,6 +21,11 @@ const TOOLS_TABS: Tab[] = [
   { id: "logcat", label: "Logcat", icon: "terminal" },
   { id: "apk-manager", label: "APK Manager", icon: "package" },
   { id: "projects", label: "Projects", icon: "folder" },
+  { id: "automation", label: "Automation", icon: "lab" },
+];
+
+const PUBLISH_TABS: Tab[] = [
+  { id: "publish", label: "Play Store", icon: "rocket" },
 ];
 
 const SYSTEM_TABS: Tab[] = [
@@ -63,7 +68,9 @@ function getIcon(name: string): string {
     terminal: "\u25B6",
     package: "\u25A0",
     folder: "\u25C7",
+    rocket: "\u2191",
     settings: "\u2699",
+    lab: "\u25C9",
   };
   return icons[name] || "\u25CF";
 }
@@ -74,7 +81,7 @@ export function Sidebar() {
   const companionRunning = useBlitzStore((s) => s.companionRunning);
 
   const connectedCount = devices.filter(
-    (d) => d.type === "device" || d.type === "emulator"
+    (d) => d.status === "device"
   ).length;
 
   return (
@@ -91,6 +98,7 @@ export function Sidebar() {
       <nav className="flex-1 p-2 overflow-y-auto">
         <TabGroup label="Develop" tabs={DEVELOP_TABS} />
         <TabGroup label="Tools" tabs={TOOLS_TABS} />
+        <TabGroup label="Publishing" tabs={PUBLISH_TABS} />
         <TabGroup label="System" tabs={SYSTEM_TABS} />
       </nav>
 
@@ -116,7 +124,7 @@ export function Sidebar() {
         )}
         {sdkConfig && (
           <p className="text-[9px] text-[var(--text-secondary)] truncate font-mono">
-            SDK: {sdkConfig.android_sdk_path}
+            SDK: {sdkConfig.androidSdkPath}
           </p>
         )}
       </div>

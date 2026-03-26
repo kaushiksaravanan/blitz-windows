@@ -12,6 +12,7 @@ export function LogcatViewer() {
   const logcatLines = useBlitzStore((s) => s.logcatLines);
   const logcatLoading = useBlitzStore((s) => s.logcatLoading);
   const logcatSerial = useBlitzStore((s) => s.logcatSerial);
+  const logcatError = useBlitzStore((s) => s.logcatError);
   const loadLogcat = useBlitzStore((s) => s.loadLogcat);
   const clearLogcat = useBlitzStore((s) => s.clearLogcat);
 
@@ -174,6 +175,12 @@ export function LogcatViewer() {
             Clear
           </button>
         </div>
+
+        {logcatError && (
+          <div className="mt-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-[var(--error)] text-sm whitespace-pre-wrap break-words">
+            {logcatError}
+          </div>
+        )}
       </div>
 
       {/* Log Output */}
@@ -198,7 +205,7 @@ export function LogcatViewer() {
             </div>
           ) : (
             filteredLines.map((line, i) => (
-              <div key={i} className="flex">
+              <div key={`${logcatSerial}-${i}-${line.substring(0, 30)}`} className="flex">
                 <span className="text-[var(--text-secondary)] w-12 shrink-0 text-right mr-4 select-none">
                   {i + 1}
                 </span>

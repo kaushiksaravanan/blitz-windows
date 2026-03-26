@@ -25,8 +25,8 @@ export function Dashboard() {
     return () => clearInterval(interval);
   }, [loadDevices, loadAvds]);
 
-  const connectedDevices = devices.filter((d) => d.type === "device");
-  const runningEmulators = devices.filter((d) => d.is_emulator && d.type !== "offline");
+  const connectedDevices = devices.filter((d) => d.status === "device");
+  const runningEmulators = devices.filter((d) => d.isEmulator && d.status !== "offline");
   const activeBuilds = builds.filter(
     (b) => b.phase !== "complete" && b.phase !== "failed" && b.phase !== "cancelled"
   );
@@ -69,8 +69,8 @@ export function Dashboard() {
           Environment
         </h3>
         <div className="p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border)] grid grid-cols-2 gap-3 text-sm">
-          <InfoRow label="Android SDK" value={sdkConfig?.android_sdk_path || "Not configured"} />
-          <InfoRow label="Java Home" value={sdkConfig?.java_home || "Not configured"} />
+          <InfoRow label="Android SDK" value={sdkConfig?.androidSdkPath || "Not configured"} />
+          <InfoRow label="Java Home" value={sdkConfig?.javaHome || "Not configured"} />
           <InfoRow
             label="Companion Server"
             value={companionRunning ? "Running" : "Stopped"}
@@ -103,9 +103,9 @@ export function Dashboard() {
                 <div className="flex items-center gap-2 mb-1">
                   <div
                     className={`w-2 h-2 rounded-full ${
-                      device.type === "device"
+                      device.status === "device"
                         ? "bg-[var(--success)]"
-                        : device.type === "unauthorized"
+                        : device.status === "unauthorized"
                           ? "bg-[var(--warning)]"
                           : "bg-[var(--text-secondary)]"
                     }`}
@@ -115,8 +115,8 @@ export function Dashboard() {
                   </h4>
                 </div>
                 <p className="text-xs text-[var(--text-secondary)]">
-                  {device.is_emulator ? "Emulator" : "Physical"} &middot;{" "}
-                  Android {device.android_version || "?"} &middot; API {device.api_level || "?"}
+                  {device.isEmulator ? "Emulator" : "Physical"} &middot;{" "}
+                  Android {device.androidVersion || "?"} &middot; API {device.apiLevel || "?"}
                 </p>
                 <p className="text-[10px] text-[var(--text-secondary)] font-mono mt-1">
                   {device.serial}

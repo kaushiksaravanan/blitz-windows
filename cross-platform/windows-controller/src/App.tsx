@@ -13,6 +13,8 @@ import { LogcatViewer } from "./components/LogcatViewer";
 import { ApkManager } from "./components/ApkManager";
 import { ProjectPanel } from "./components/ProjectPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { PlayStorePanel } from "./components/PlayStorePanel";
+import { AutomationPanel } from "./components/AutomationPanel";
 
 export function App() {
   const activeTab = useBlitzStore((s) => s.activeTab);
@@ -22,7 +24,8 @@ export function App() {
 
   useEffect(() => {
     initialize();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // initialize is a stable Zustand action — no need to list as dependency
+  }, []);
 
   if (!initialized) {
     return (
@@ -74,6 +77,8 @@ export function App() {
         {activeTab === "logcat" && <LogcatViewer />}
         {activeTab === "apk-manager" && <ApkManager />}
         {activeTab === "projects" && <ProjectPanel />}
+        {activeTab === "publish" && <PlayStorePanel />}
+        {activeTab === "automation" && <AutomationPanel />}
         {activeTab === "settings" && <SettingsPanel />}
       </main>
     </div>

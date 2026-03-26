@@ -9,13 +9,18 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  // Prevent vite from obscuring Rust errors
+  // Use relative paths so Electron can load from file://
+  base: "./",
   clearScreen: false,
   server: {
     port: 1420,
     strictPort: true,
     watch: {
-      ignored: ["**/src-tauri/**"],
+      ignored: ["**/src-electron/**", "**/src-tauri/**"],
     },
+  },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
   },
 });

@@ -1,43 +1,17 @@
-# Swift / Xcode build artifacts
-.build/
-*.o
-*.d
-*.swp
-*.lock
-/build/
-DerivedData/
-*.xcuserstate
-xcuserdata/
-*.xcworkspace/xcuserdata/
-*.moved-aside
-
-# Xcode
-*.pbxuser
-*.mode1v3
-*.mode2v3
-*.perspectivev3
-*.hmap
-*.ipa
-*.dSYM.zip
-*.dSYM
-
-# SPM
-.swiftpm/
-Packages/
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
-.Spotlight-V100
-.Trashes
-
-# Node (for NodeSidecar)
+# Node.js
 node_modules/
 npm-debug.log
 yarn-error.log
 .npm/
+
+# Electron build output
+dist/
+dist-electron/
+release/
+out/
+
+# Vite
+*.local
 
 # Environment / secrets
 .env
@@ -51,14 +25,20 @@ yarn-error.log
 *.swp
 *~
 
-# Rust / Cargo
-target/
-
-# Frontend build output
-dist/
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
 # Android / Gradle
 .gradle/
 *.apk
 *.aab
 local.properties
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+*.log

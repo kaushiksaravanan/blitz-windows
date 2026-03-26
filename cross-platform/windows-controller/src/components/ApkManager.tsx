@@ -4,13 +4,13 @@
 
 import { useState } from "react";
 import { useBlitzStore } from "../store";
-import { open } from "@tauri-apps/plugin-dialog";
 
 export function ApkManager() {
   const devices = useBlitzStore((s) => s.devices);
   const packages = useBlitzStore((s) => s.packages);
   const packagesLoading = useBlitzStore((s) => s.packagesLoading);
   const packagesSerial = useBlitzStore((s) => s.packagesSerial);
+  const packagesError = useBlitzStore((s) => s.packagesError);
   const loadPackages = useBlitzStore((s) => s.loadPackages);
   const installApk = useBlitzStore((s) => s.installApk);
   const uninstallPackage = useBlitzStore((s) => s.uninstallPackage);
@@ -34,10 +34,10 @@ export function ApkManager() {
     setMessage(null);
 
     try {
-      const filePath = await open({
+      const filePath = await window.electronAPI.invoke("show_open_dialog", {
         filters: [{ name: "Android Package", extensions: ["apk"] }],
-        multiple: false,
-      });
+        properties: ["openFile"],
+      }) as string | null;
 
       if (!filePath) return; // User cancelled
 
@@ -129,6 +129,12 @@ export function ApkManager() {
             }`}
           >
             {message.text}
+          </div>
+        )}
+
+        {packagesError && (
+          <div className="mt-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-[var(--error)] text-sm whitespace-pre-wrap break-words">
+            {packagesError}
           </div>
         )}
       </div>

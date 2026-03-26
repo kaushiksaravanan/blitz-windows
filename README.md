@@ -1,94 +1,81 @@
 <div align="center">
   <img src=".github/assets/logo.png" width="100" />
-  <h1>Blitz</h1>
-  <p>Native macOS app for building, testing, and shipping iOS apps with AI agents</p>
+  <h1>Blitz for Windows</h1>
+  <p>Windows desktop app for building, testing, and shipping Android apps</p>
 
-  [![Website](https://img.shields.io/badge/blitz.dev-website-black)](https://blitz.dev/)
-  [![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/wJQ6dA95S6)
   [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 </div>
 
 <br />
 
-<div align="center">
-  <img src=".github/assets/hero.png" width="600" />
-</div>
+Blitz is a Windows desktop app that streamlines the Android development lifecycle — device/emulator management, Gradle/Flutter/React Native builds, logcat viewing, APK management, and automated Play Store publishing. Built with Electron + React + TypeScript.
 
-<br />
+## Features
 
-Blitz is a native macOS app that gives AI agents full control over the iOS development lifecycle — simulator/iPhone management, database setup, and App Store Connect submission. It includes built-in MCP servers so Claude Code (or any MCP client) can build, test, and submit your app to the App Store.
-
-<div align="center">
-  <img src=".github/assets/before-after.png" width="800" />
-</div>
-
-### Demo: submitting an app to App Store Connect for review
-
-https://github.com/user-attachments/assets/07364d9f-f6a7-4375-acc8-b7ab46dcc60e
+- **Device Management** — List, inspect, screenshot, and control ADB devices
+- **Emulator Management** — List AVDs, start/stop/cold boot emulators
+- **Build Execution** — Run Gradle, Flutter, or React Native builds with streaming logs
+- **Logcat Viewer** — Real-time log viewing with filtering
+- **APK Manager** — Install/uninstall APKs, list packages
+- **Project Management** — Auto-detect project types (Android, Flutter, RN)
+- **Play Store Publishing** — Content generation, screenshot composition, video capture, and browser-automated Play Console submission
+- **Android Companion App** — Optional Kotlin/Compose mobile app that connects to the desktop controller over HTTP/WebSocket
 
 ## Requirements
 
-- macOS 14+ (Sonoma)
-- Xcode 16+ (Swift 5.10+)
-- Node.js 18+ (for build scripts and sidecar)
+- **Windows 10/11** (64-bit)
+- **Node.js 18+**
+- **Android SDK** — via [Android Studio](https://developer.android.com/studio) or [command-line tools](https://developer.android.com/studio#command-line-tools-only)
+- **Git**
 
-## Build from source
+Optional:
+- **Java JDK 17+** — for Gradle builds (usually bundled with Android Studio)
+- **Flutter SDK** — for Flutter project builds
+- **Chrome** — for Play Store publishing automation (launched with `--remote-debugging-port=9222`)
+- **ffmpeg** — for promo video generation
 
-```bash
+## Build from Source
+
+```powershell
 # Clone
-git clone https://github.com/blitzdotdev/blitz-macos.git
-cd blitz-macos
+git clone https://github.com/user/blitz-windows.git
+cd blitz-windows\cross-platform\windows-controller
 
-# Debug build
-swift build
+# Install dependencies
+npm install
 
-# Release build
-swift build -c release
+# Development mode (Vite + Electron)
+npm run dev:electron
 
-# Bundle as .app (ad-hoc signed)
-bash scripts/bundle.sh release
+# Build everything
+npm run build:all
 
-# The app is at .build/Blitz.app
-open .build/Blitz.app
+# Package as Windows installer (NSIS)
+npm run dist
 ```
-
-For signed builds, copy `.env.example` to `.env` and fill in your Apple Developer credentials, then run:
-
-```bash
-bash scripts/bundle.sh release
-```
-
-## Verify a release binary
-
-Every GitHub release includes `SHA256SUMS.txt` with checksums of the CI-built binary. To verify:
-
-**Option 1: Check a downloaded binary against release checksums**
-```bash
-# Download both Blitz.app.zip and SHA256SUMS.txt from the GitHub release
-shasum -a 256 -c SHA256SUMS.txt
-```
-
-**Option 2: Build from source and compare**
-```bash
-bash scripts/verify-build.sh v1.0.20
-```
-
-This builds the app locally and compares the main executable checksum against the release. CI builds use ad-hoc signing, so checksums match when you build with the same toolchain.
-
-**Option 3: Inspect the CI build yourself**
-
-All release binaries are built by the public [GitHub Actions workflow](.github/workflows/build.yml). The workflow is transparent — you can audit every step and verify that the published artifact matches what the workflow produced.
-
-## Security and privacy
-
-- **No analytics or telemetry.** The app makes zero tracking calls. No data is collected about your usage.
-- **No phone-home.** The only network requests are to Apple's App Store Connect API (when you use ASC features) and GitHub's releases API for optional update checks.
-- **MCP server is localhost-only.** The built-in MCP server binds to `127.0.0.1` and is never exposed to the network.
-- **No access to sensitive data.** The app does not access your contacts, photos, location, or any personal data. Screen capture is limited to the iOS Simulator window.
 
 ## Architecture
 
-Single-target SwiftUI app built with Swift Package Manager. All source lives in `src/`. See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
+```
+cross-platform/
+  core/                    # Shared TypeScript library (@blitz/core)
+  windows-controller/      # Electron desktop app
+    src/                   # React frontend (Vite + Tailwind + Zustand)
+    src-electron/          # Electron main process (Node.js backend)
+      services/            # ADB, emulator, gradle, play-store, etc.
+  android-companion/       # Kotlin + Jetpack Compose Android app
+```
+
+The React frontend communicates with the Node.js backend via Electron IPC (`contextBridge`). An optional companion server (Express.js on port 9400) lets the Android companion app connect remotely.
+
+See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation. See [cross-platform/ARCHITECTURE.md](cross-platform/ARCHITECTURE.md) for system diagrams and data flow.
+
+## Security and Privacy
+
+- **No analytics or telemetry.** No tracking calls, no data collection.
+- **No native addons.** Pure Node.js backend — avoids Windows Defender false positives.
+- **Companion server is opt-in.** Only enabled manually from Settings. Uses Bearer token authentication.
+- **Play Store automation uses your own Chrome instance.** No credentials stored — Playwright CDP connects to your already-signed-in browser.
 
 ## License
 

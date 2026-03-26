@@ -10,6 +10,7 @@ export function DevicePanel() {
   const selectedDeviceSerial = useBlitzStore((s) => s.selectedDeviceSerial);
   const deviceScreenshot = useBlitzStore((s) => s.deviceScreenshot);
   const devicesLoading = useBlitzStore((s) => s.devicesLoading);
+  const devicesError = useBlitzStore((s) => s.devicesError);
   const loadDevices = useBlitzStore((s) => s.loadDevices);
   const selectDevice = useBlitzStore((s) => s.selectDevice);
   const takeScreenshot = useBlitzStore((s) => s.takeScreenshot);
@@ -24,12 +25,23 @@ export function DevicePanel() {
   // Auto-refresh screenshot when a device is selected
   useEffect(() => {
     if (!selectedDeviceSerial) return;
+    // Verify device is still connected before taking screenshots
+    const deviceConnected = devices.some(
+      (d) => d.serial === selectedDeviceSerial && d.status === "device"
+    );
+    if (!deviceConnected) return;
     takeScreenshot(selectedDeviceSerial);
     const interval = setInterval(() => {
-      takeScreenshot(selectedDeviceSerial);
+      // Re-check in case device disconnects between intervals
+      const stillConnected = useBlitzStore.getState().devices.some(
+        (d) => d.serial === selectedDeviceSerial && d.status === "device"
+      );
+      if (stillConnected) {
+        takeScreenshot(selectedDeviceSerial);
+      }
     }, 3000);
     return () => clearInterval(interval);
-  }, [selectedDeviceSerial, takeScreenshot]);
+  }, [selectedDeviceSerial, takeScreenshot, devices]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -49,8 +61,8 @@ export function DevicePanel() {
   };
 
   const selectedDevice = devices.find((d) => d.serial === selectedDeviceSerial);
-  const physicalDevices = devices.filter((d) => !d.is_emulator);
-  const emulatorDevices = devices.filter((d) => d.is_emulator);
+  const physicalDevices = devices.filter((d) => !d.isEmulator);
+  const emulatorDevices = devices.filter((d) => d.isEmulator);
 
   return (
     <div className="h-full flex">
@@ -70,6 +82,12 @@ export function DevicePanel() {
         {devices.length === 0 && (
           <div className="p-4 rounded-lg bg-[var(--bg-tertiary)] text-center text-sm text-[var(--text-secondary)]">
             No devices found. Connect an Android device via USB or start an emulator.
+          </div>
+        )}
+
+        {devicesError && (
+          <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-[var(--error)] whitespace-pre-wrap break-words">
+            {devicesError}
           </div>
         )}
 
@@ -117,8 +135,8 @@ export function DevicePanel() {
                   {selectedDevice.model || selectedDevice.serial}
                 </h3>
                 <p className="text-xs text-[var(--text-secondary)]">
-                  Android {selectedDevice.android_version} &middot; API{" "}
-                  {selectedDevice.api_level} &middot; {selectedDevice.serial}
+                  Android {selectedDevice.androidVersion} &middot; API{" "}
+                  {selectedDevice.apiLevel} &middot; {selectedDevice.serial}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -231,10 +249,10 @@ function DeviceRow({
   device: {
     serial: string;
     model: string;
-    type: string;
-    android_version: string;
-    api_level: number;
-    is_emulator: boolean;
+    status: string;
+    androidVersion: string;
+    apiLevel: number;
+    isEmulator: boolean;
   };
   isSelected: boolean;
   onSelect: () => void;
@@ -244,16 +262,16 @@ function DeviceRow({
       onClick={onSelect}
       className={`w-full text-left p-2.5 rounded-lg mb-1 transition-colors ${
         isSelected
-          ? "bg-[var(--accent)]/10 border border-[var(--accent)]/30"
+          ? "bg-indigo-500/10 border border-indigo-500/30"
           : "hover:bg-[var(--bg-tertiary)]"
       }`}
     >
       <div className="flex items-center gap-2">
         <div
           className={`w-2 h-2 rounded-full shrink-0 ${
-            device.type === "device"
+            device.status === "device"
               ? "bg-[var(--success)]"
-              : device.type === "unauthorized"
+              : device.status === "unauthorized"
                 ? "bg-[var(--warning)]"
                 : "bg-[var(--text-secondary)]"
           }`}
@@ -263,7 +281,7 @@ function DeviceRow({
         </p>
       </div>
       <p className="text-[10px] text-[var(--text-secondary)] mt-0.5 ml-4">
-        {device.type} &middot; Android {device.android_version || "?"} &middot;{" "}
+        {device.status} &middot; Android {device.androidVersion || "?"} &middot;{" "}
         <span className="font-mono">{device.serial}</span>
       </p>
     </button>

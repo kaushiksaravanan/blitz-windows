@@ -8,6 +8,7 @@ import { useBlitzStore } from "../store";
 export function EmulatorPanel() {
   const avds = useBlitzStore((s) => s.avds);
   const avdsLoading = useBlitzStore((s) => s.avdsLoading);
+  const avdsError = useBlitzStore((s) => s.avdsError);
   const loadAvds = useBlitzStore((s) => s.loadAvds);
   const startAvd = useBlitzStore((s) => s.startAvd);
   const stopAvd = useBlitzStore((s) => s.stopAvd);
@@ -48,8 +49,8 @@ export function EmulatorPanel() {
     setStoppingSerial(null);
   };
 
-  const runningAvds = avds.filter((a) => a.is_running);
-  const stoppedAvds = avds.filter((a) => !a.is_running);
+  const runningAvds = avds.filter((a) => a.running);
+  const stoppedAvds = avds.filter((a) => !a.running);
 
   return (
     <div className="h-full overflow-y-auto p-6">
@@ -72,6 +73,12 @@ export function EmulatorPanel() {
       {error && (
         <div className="mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
           {error}
+        </div>
+      )}
+
+      {avdsError && (
+        <div className="mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm whitespace-pre-wrap break-words">
+          {avdsError}
         </div>
       )}
 
@@ -103,9 +110,9 @@ export function EmulatorPanel() {
                 key={avd.name}
                 avd={avd}
                 onStart={() => {}}
-                onStop={() => avd.running_serial && handleStop(avd.running_serial)}
+                onStop={() => avd.serial && handleStop(avd.serial)}
                 isStarting={false}
-                isStopping={avd.running_serial === stoppingSerial}
+                isStopping={avd.serial === stoppingSerial}
               />
             ))}
           </div>
@@ -147,10 +154,10 @@ function AvdCard({
     name: string;
     device: string;
     target: string;
-    api_level: number;
+    apiLevel: number;
     abi: string;
-    is_running: boolean;
-    running_serial: string | null;
+    running: boolean;
+    serial: string | null;
   };
   onStart: (coldBoot: boolean) => void;
   onStop: () => void;
@@ -164,16 +171,16 @@ function AvdCard({
           <div className="flex items-center gap-2">
             <div
               className={`w-2 h-2 rounded-full shrink-0 ${
-                avd.is_running ? "bg-[var(--success)]" : "bg-[var(--text-secondary)]"
+                avd.running ? "bg-[var(--success)]" : "bg-[var(--text-secondary)]"
               }`}
             />
             <h4 className="font-medium text-[var(--text-primary)] truncate">
               {avd.name}
             </h4>
           </div>
-          {avd.running_serial && (
+          {avd.serial && (
             <p className="text-[10px] text-[var(--text-secondary)] font-mono ml-4">
-              {avd.running_serial}
+              {avd.serial}
             </p>
           )}
         </div>
@@ -181,12 +188,12 @@ function AvdCard({
 
       <div className="space-y-1 text-xs text-[var(--text-secondary)] mb-3">
         <p>Device: {avd.device || "Generic"}</p>
-        <p>Target: {avd.target || `API ${avd.api_level}`}</p>
+        <p>Target: {avd.target || `API ${avd.apiLevel}`}</p>
         <p>ABI: {avd.abi}</p>
       </div>
 
       <div className="flex gap-2">
-        {avd.is_running ? (
+        {avd.running ? (
           <button
             onClick={onStop}
             disabled={isStopping}
